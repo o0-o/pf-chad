@@ -1,0 +1,192 @@
+#!/usr/bin/env sh
+
+set -euo pipefail
+set -x
+
+## disks
+## run this in shell before installation
+## creates a mirror on first 2 drives that are not marked as removable
+#count=0
+#raid_devs=''
+#dmesg									|
+#sed	-ne	'/^[s,w]d[0-9]* / { /removable/! { s/ .*$//; p; }; }'	|
+#while read -r hd; do
+#	# make special files for devices
+#	(	cd	/dev/
+#		sh	/dev/MAKEDEV	$hd
+#	)
+#	# clear out any existing metadata on the drive
+#	dd	if=/dev/zero	of=/dev/r${hd}c	bs=1m	count=1
+#	# install mbr
+#	fdisk	-iy	$hd
+#	# calculate partition size with 90% provision
+#	boundstart=$(	disklabel	-c	$hd			|
+#			sed	-ne	'/^boundstart/ { s/^.* //;p; }'
+#		)
+#	boundend=$(	disklabel	-c	$hd			|
+#			sed	-ne	'/^boundstart/ { s/^.* //;p; }'
+#		)
+#	part_size=$(( ( ( $boundend - $boundstart ) / 10 ) * 9 ))
+#	# partition the mirror drives
+#	echo	-n	"z\na\n\n\n${part_size}\nRAID\nw\nq\n"	|
+#	disklabel	-E	$hd
+#	# build raid_dev string
+#	raid_devs="${raid_devs} ${hd}a"
+#	# limit to 2 drives
+#	count=$(( $count + 1 ))
+#	[ $count -lt 2 ]	||	break
+#done
+#unset count
+## create the raid device
+#raid_devs=$(	echo	$raid_devs		|
+#		sed	-e	's/ /,/g'
+#	)
+#mirror_dev=$(	bioctl	-c	1				\
+#			-l	$raid_devs			\
+#			softraid0				|
+#		sed	-ne	'/attached as/ { s/^.* /;p; }'
+#	)
+#dd	if=/dev/zero	of="/dev/r${mirror_dev}c"	bs=1m	count=1
+#fdisk	-iy	$mirror_dev
+## partition
+#echo	'/		1-8g	4%'	>	/tmp/parts
+#echo	'swap		1-4g	2%'	>>	/tmp/parts
+#echo	'/tmp		1-16g	8%'	>>	/tmp/parts
+#echo	'/var/log	1-8g	4%'	>>	/tmp/parts
+#echo	'/usr		2-8g	4%'	>>	/tmp/parts
+#echo	'/usr/local	1-16g	8%'	>>	/tmp/parts
+#echo	'/usr/src	1-2g	1%'	>>	/tmp/parts
+#echo	'/usr/obj	2-8g	4%'	>>	/tmp/parts
+#echo	'/home		1-16g	8%'	>>	/tmp/parts
+#echo	'/var		2-64g	40%'	>>	/tmp/parts
+#disklabel	-Aw					\
+#		-T	/tmp/parts			\
+#		-F	"/tmp/i/fstab.${mirror_dev}"	\
+#		$mirror_dev
+
+# hardening
+rcctl	set	accounting status on
+sysctl	-w	vm.malloc_conf=CFGU
+sysctl	-w	ddb.panic=0
+printf	'%s\n'				\
+	'vm.malloc_conf=CFGU'		\
+	'ddb.panic=0'			\
+	>>	'/etc/sysctl.conf'
+printf	'%s\n'				\
+	'CHECKFILESYSTEMS=1'		\
+	>>	'/etc/daily.local'
+! fgrep	-q	'/altroot ffs xx 0 0'	'/etc/fstab'	||
+printf	'%s\n'				\
+	'ROOTBACKUP=1'			\
+	>>	'/etc/daily.local'
+
+# time
+ln	-sf	'/usr/share/zoneinfo/US/Eastern'	\
+		'/etc/localtime'
+rcctl	enable	ntpd
+rcctl	restart	ntpd
+
+# antivirus
+pkg_add clamav
+cp	-a	'/etc/freshclam.conf'		\
+		'/etc/examples/freshclam.conf'
+sed	-e	'/^Example/	s/^/#/'				\
+	-e	'/^#LogSyslog/	s/^#//'				\
+	-e	's@^#\(NotifyClamd\)@\1 /etc/clamd.conf@'	\
+	'/etc/examples/freshclam.conf'				\
+	>	'/etc/freshclam.conf'
+cp	-a	'/etc/clamd.conf'		\
+		'/etc/examples/clamd.conf'
+sed	-e	'/^Example/			s/^/#/'	\
+	-e	'/^#LogSyslog/			s/^#//'	\
+	-e	'/^#LocalSocket[[:space:]]/	s/^#//'	\
+	-e	'/^#LocalSocketMode/		s/^#//'	\
+	-e	'/^# Default: scan all/ {
+			a\
+			ExcludePath ^/dev/
+		}'					\
+	-e	's/^#\(MaxDirectoryRecursion\).*/\1 0/'	\
+	-e	'/^User/			s/^/#/'	\
+	'/etc/examples/clamd.conf'			\
+	>	'/etc/clamd.conf'
+freshclam
+rcctl	enable	freshclam
+rcctl	start	freshclam
+rcctl	enable	clamd
+rcctl	start	clamd
+printf	'%s\n'				\
+	'nice -n 20 clamdscan /'	\
+	>	'/etc/daily.local'
+
+# smartd
+pkg_add	smartmontools
+cp	-a	'/etc/smartd.conf'		\
+		'/etc/examples/smartd.conf'
+printf	'%s%s%s\n'					\
+	'DEVICESCAN -a -o on -S on -n standby,q '	\
+	'-s (S/../.././01|L/../../6/03) '		\
+	'-W 4,35,40 -m root'				\
+	>>	'/etc/smartd.conf'
+
+# check for updates
+fw_update	-i		|
+fgrep	-q	'Missing'	||
+fw_update
+
+[[ $(syspatch -c) = '' ]]	||
+syspatch
+
+# ipmi
+[ -e  '/dev/ipmi'*  ]	&&
+pkg_add	ipmitool	&&
+printf	'%s\n'		\
+	'enable ipmi'	\
+	'quit'		|
+config	-ef	'/bsd'
+sha256	-h	'/var/db/kernel.SHA256'	'/bsd'
+
+# add admin user
+typeset dict_length=$(	wc	-l	'/usr/share/dict/words'	|
+			awk	'{print $1}'
+		)
+typeset	random_line=$((	$RANDOM$RANDOM % $dict_length ))
+typeset	sysadm=$(	sed	-ne	"${random_line}p"	\
+			'/usr/share/dict/words'
+		)
+typeset adm_pwd=$(	strings	/dev/urandom			|
+			grep	-o	'[[:alnum:][:punct:]]'	|
+			head	-n	$(( $RANDOM % 6 +12 ))	|
+			tr	-d	'\n'
+		)
+useradd	-m					\
+	-g	=uid				\
+	-G	'wheel'				\
+	-s	"$(which sh)"			\
+	-p	"$(encrypt -b a "${adm_pwd}")"	\
+	--	"${sysadm}"
+cp	-a	'/etc/examples/doas.conf'	\
+		'/etc/doas.conf'
+
+# disable root login
+
+# sensorsd
+cp	-a	'/etc/examples/sensorsd.conf'	\
+		'/etc/sensorsd.conf'
+# exclude temp and fan not listed by sysctl to avoid ipmi quirks
+printf	'%s\n'				\
+	''				\
+	'temp:istatus'			\
+	'fan:istatus'			\
+	>>	'/etc/sensorsd.conf'
+sysctl	'hw.sensors'			|
+sed	-e	's/=.*$//'		\
+	>>	'/etc/sensorsd.conf'
+rcctl	enable	sensorsd
+rcctl	start	sensorsd
+
+echo	"${sysadm}"
+echo	"${adm_pwd}"
+
+reboot	-n
+
+# vim: ts=8:sw=8:sts=8:noet:ft=sh
