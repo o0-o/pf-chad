@@ -73,7 +73,8 @@ typeset nameservers=$(	dig "ns.${domain}"			|
 # set interface to up
 grep	-q "^up$"	"/etc/${iface_cfg}"		||
 {	touch			"/etc/${iface_cfg}"
-	sed	-e '1iup'	"/etc/${iface_cfg}"
+	mv	"/etc/${iface_cfg}"	'/tmp'
+	sed	-e '1iup'	"/tmp/${iface_cfg}"	"/etc/${iface_cfg}"
 }
 # if vlan, switch to vlan conf file
 ! $vlan	||
