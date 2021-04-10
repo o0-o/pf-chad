@@ -68,6 +68,11 @@ printf	'%s | %s\n'					\
 	"pfctl -a ${iface} -f -"			\
 	>>	"/etc/${iface_cfg}"
 
+# default gateway
+printf	'%s\n'			\
+	"${hop}"		\
+	>	'/etc/mygate'
+
 # install most updated pf-chad rules
 pkg_add	git
 : rm -rf '/tmp/pf-chad'
