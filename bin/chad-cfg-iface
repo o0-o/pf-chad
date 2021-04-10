@@ -94,7 +94,7 @@ printf	'%s\n'				\
 	>>	"/etc/${iface_cfg}"
 [ -z "${description-}" ]		||
 printf	'%s\n'				\
-	"description ${description}"	\
+	"description '${description}'"	\
 	>>	"/etc/${iface_cfg}"
 
 # groups
@@ -109,6 +109,11 @@ done
 printf	'%s | %s\n'					\
 	"!echo 'antispoof quick log for ${iface}'"	\
 	"pfctl -a ${iface} -f -"			\
+	>>	"/etc/${iface_cfg}"
+# ping
+printf	'%s | %s\n'							\
+	"!echo 'pass in on ${iface} inet proto icmp to ${iface}'"	\
+	"pfctl -a ${iface} -f -"					\
 	>>	"/etc/${iface_cfg}"
 
 # pf tables
@@ -187,8 +192,8 @@ cp	-a	'/var/unbound/etc/unbound.conf'		\
 		"/var/unbound/etc/.unbound.conf.${ts}"
 sed -e							\
 '/hide-version/ i\
-	private-zone: "'"${fqdn}"'"\
-	domain-insecure: "'"${fqdn}"'\
+	private-domain: "'"${fqdn}"'"\
+	domain-insecure: "'"${fqdn}"'"\
 	access-control: '"10.${site}.${subnet}.0/24"' allow\
 \
 '	"/var/unbound/etc/.unbound.conf.${ts}"			\
