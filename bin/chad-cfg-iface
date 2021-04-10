@@ -199,7 +199,7 @@ sed -e							\
 '	"/var/unbound/etc/.unbound.conf.${ts}"			\
 	>	'/var/unbound/etc/unbound.conf'
 printf	'\nstub-zone:\n\tname: "%s"\n\tstub-addr: %s\n\tstub-no-cache: yes\n' \
-	"${domain}"	'127.0.0.1@5678'				\
+	"${fqdn}"	'127.0.0.1@5678'				\
 	>>	'/var/unbound/etc/unbound.conf'
 unbound-checkconf
 rcctl	restart unbound
