@@ -75,7 +75,8 @@ printf	'%s\n'			\
 
 # install most updated pf-chad rules
 pkg_add	git
-: rm -rf '/tmp/pf-chad'
+[ ! -e '/tmp/pf-chad' ]		||
+rm	-rf	'/tmp/pf-chad'
 git	clone	--depth 1			\
 	'https://github.com/o0-o/pf-chad.git'	\
 	'/tmp/pf-chad'
