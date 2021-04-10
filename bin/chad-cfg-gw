@@ -45,14 +45,14 @@ grep	-q "^up$"	"/etc/${iface_cfg}"		||
 }
 # if vlan, switch to vlan conf file
 ! $vlan	||
-{	typeset	iface_cfg="hostname.vlan${subnet}"
+{	typeset	iface_cfg="hostname.vlan${vlan}"
 	# interface
 	printf	'%s\n'					\
-		"vnetid ${subnet} parent ${iface}"	\
+		"vnetid ${vlan} parent ${iface}"	\
 		'up'					\
 	>	"/etc/${iface_cfg}"
 	typeset	parent_iface="${iface}"
-	typeset	iface="vlan${subnet}"
+	typeset	iface="vlan${vlan}"
 }
 # finish configuring interface
 printf	'%s\n'					\
