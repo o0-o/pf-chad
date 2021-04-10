@@ -41,17 +41,16 @@ done
 # discover environment
 typeset	iface="wg${subnet}"
 typeset	iface_cfg="hostname.${iface}"
+: ${site:=$(	ifconfig					|
+		grep -m 1 'inet 10'				|
+		awk '{print $2}'				|
+		cut -d '.' -f 2						)}
 typeset	ipv4="10.${site}.${subnet}.$(( $RANDOM%199 +1 ))"
 typeset	domain=$(	hostname				|
 			rev					|
 			cut -d '.' -f -2			|
 			rev						)
 typeset fqdn="${name}.${domain}"
-[ ! -z "${site-}" ]							     ||
-typeset	site=$(	ifconfig					|
-		grep -m 1 'inet 10'				|
-		awk '{print $2}'				|
-		cut -d '.' -f 2						)}
 typeset	nameservers:=$(	grep "interface:[[:space:]]*10"			\
 				'/var/unbound/etc/unbound.conf'	|
 			cut -d ' ' -f 2					)
@@ -65,10 +64,8 @@ which	wg		||
 pkg_add	wireguard-tools
 install	-d	-m	700	'/etc/wg'
 
-# generate keys
+# generate key
 typeset	pvk=$(	wg	genkey	)
-typeset	pubk=$(	echo	"${pvk}"	|
-		wg	pubkey			)
 typeset	port=$(( 46000 + $subnet ))
 
 # configure wg server
@@ -83,8 +80,8 @@ printf	'%s\n'					\
 printf	'%s\n'								\
 	'up'								\
 	"inet ${ipv4}/24"						\
-	"!/usr/local/bin/wg setconf wg${subnet} /etc/wg/wg${subnet}.conf"
-	>>	"/etc/${iface_cfg}"
+	"!/usr/local/bin/wg setconf wg${subnet} /etc/wg/wg${subnet}.conf" \
+	>	"/etc/${iface_cfg}"
 [ -z "${description-}" ]		||
 printf	'%s\n'				\
 	"description '${description}'"	\
@@ -106,6 +103,11 @@ printf	'%s | %s\n'					\
 # ping
 printf	'%s | %s\n'							\
 	"!echo 'pass in on ${iface} inet proto icmp to ${iface}'"	\
+	"pfctl -a ${iface} -f -"					\
+	>>	"/etc/${iface_cfg}"
+# wireguard service
+printf	'%s | %s\n'							\
+	"!echo 'pass in on egress inet proto udp to egress port ${port}'" \
 	"pfctl -a ${iface} -f -"					\
 	>>	"/etc/${iface_cfg}"
 
