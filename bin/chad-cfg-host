@@ -1,0 +1,93 @@
+#!/usr/bin/env sh
+
+set -euo pipefail
+set -x
+
+# parse aguments
+while [ ! -z ${1-} ]; do
+	case "$1" in
+		--net)
+			typeset net=$2
+			shift 2
+			;;
+		--name)
+			typeset name=$2
+			shift 2
+			;;
+		--mac)
+			typeset mac=$2
+			shift 2
+			;;
+		*)
+			echo "Not recognized: $1" >&2
+			exit 1
+			;;
+	esac
+done
+
+typeset	dhcpd_block=$(	sed	-ne	'/shared-network net/ {
+						:loop
+						p
+						n
+						/}/ {
+							p
+							q
+						}
+						b loop
+					}'			\
+				'/etc/dhcpd.conf'			)
+typeset	zone=$(	echo	"${dhcpd_block}"	|
+		grep	"option domain-name "	|
+		awk	'{ print $3 }'		|
+		tr	-d	'"'		|
+		tr	-d	';'			)
+typeset	net_octets=$(	echo	"${dhcpd_block}"		|
+			grep	'subnet'			|
+			awk	'{ print $2 }'			|
+			cut	-d	'.'	-f	-3		)
+typeset host_octet=1
+# find first available ip address
+while [ -z ${ipv4-} ]; do
+	echo	"${dhcpd_block}"			|
+	grep	"${net_octets}.${host_octet}[[:blank:];]"		&&
+	typeset	host_octet=$(( $host_octet + 1 ))	||
+	typeset	ipv4="${net_octets}.${host_octet}"
+	[ $host_octet = 200 ]	&&
+	{	printf	'%s\n'	'No available addresses'	>&2
+		exit 1
+	}
+done
+
+typeset	ts=$(date +%Y%m%d%H%M%S)
+cp	-a	'/etc/dhcpd.conf'		\
+		"/etc/.dhcpd.conf.${ts}"
+sed	-e	'/shared-network '"${net}"'/ {
+			:loop
+			n
+			/range/ {
+				a\
+\
+		host '"${name}"' {\
+			hardware ethernet '"${mac}"';\
+			fixed-address '"${ipv4}"';\
+		}
+				b
+			}
+			b loop
+		}'					\
+		"/etc/.dhcpd.conf.${ts}"		\
+	>	'/etc/dhcpd.conf'
+rcctl	restart	dhcpd
+
+# add A record
+typeset	ts=$(date +%Y%m%d%H%M%S)
+cp	-a	"/var/nsd/zones/master/${zone}"		\
+		"/var/nsd/zones/master/.${zone}.${ts}"
+printf	'%s\tIN\tA\t%s\n'		\
+	"${name}"	"${ipv4}"	\
+	>>	"/var/nsd/zones/master/${zone}"
+nsd-checkzone	"${zone}"	"/var/nsd/zones/master/${zone}"
+rcctl	reload	nsd
+host	"${name}.${zone}"
+
+# vim: ds=8:sw=8:sts=8:noet:ft=zsh
