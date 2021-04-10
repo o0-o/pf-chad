@@ -1,0 +1,115 @@
+#!/usr/bin/env sh
+
+set -euo pipefail
+set -x
+
+# parse aguments
+while [ ! -z ${1-} ]; do
+	case "$1" in
+		--ip)
+			typeset ipv4=$2
+			shift 2
+			;;
+		--mask)
+			typeset mask=$2
+			shift 2
+			;;
+		--hop)
+			typeset next_hop=$2
+			shift 2
+			;;
+		--iface)
+			typeset iface=$2
+			shift 2
+			;;
+		--vlan)
+			typeset vlan=$2
+			shift 2
+			;;
+		--description)
+			typeset description=$2
+			shift 2
+			;;
+		*)
+			echo "Not recognized: $1" >&2
+			exit 1
+			;;
+	esac
+done
+
+# set edge/wan interface to up
+typeset	iface_cfg="hostname.${iface}"
+grep	-q "^up$"	"/etc/${iface_cfg}"		||
+{	touch			"/etc/${iface_cfg}"
+	sed	-e '1iup'	"/etc/${iface_cfg}"
+}
+# if vlan, switch to vlan conf file
+! $vlan	||
+{	typeset	iface_cfg="hostname.vlan${subnet}"
+	# interface
+	printf	'%s\n'					\
+		"vnetid ${subnet} parent ${iface}"	\
+		'up'					\
+	>	"/etc/${iface_cfg}"
+	typeset	parent_iface="${iface}"
+	typeset	iface="vlan${subnet}"
+}
+# finish configuring interface
+printf	'%s\n'					\
+	'lladdr random'				\
+	"inet ${ipv4}/${mask}"			\
+	>>	"/etc/${iface_cfg}"
+printf	'%s\n'					\
+	"description ${description-WAN}"	\
+	>>	"/etc/${iface_cfg}"
+# antispoof rule
+printf	'%s | %s\n'					\
+	"!echo 'antispoof quick log for ${iface}'"	\
+	"pfctl -a ${iface} -f -"			\
+	>>	"/etc/${iface_cfg}"
+
+# install most updated pf-chad rules
+pkg_add	git
+: rm -rf '/tmp/pf-chad'
+git	clone	--depth 1			\
+	'https://github.com/o0-o/pf-chad.git'	\
+	'/tmp/pf-chad'
+cp	-a	'/etc/pf.conf'		\
+		'/etc/.pf.conf.default'
+cp	-a	'/tmp/pf-chad/etc'	\
+		'/'
+rm -rf '/tmp/pf-chad'
+# allow this host to access the internet
+printf	'%s\n'					\
+	"!pfctl -t wan-c -T add ${iface}"	\
+	>>	"/etc/${iface_cfg}"
+
+# unbound
+cp	-a	'/var/unbound/etc/unbound.conf'	\
+		'/etc/examples/unbound.conf'
+printf	'%s\n'					\
+	'forward-zone:'				\
+	>>	'/var/unbound/etc/unbound.conf'
+printf	'\t%s\n'						\
+	'name: "."'						\
+	'forward-tls-upstream: yes'				\
+	'forward-first: no'					\
+	'forward-addr: 9.9.9.9@853#dns.quad9.net'		\
+	'forward-addr: 149.112.112.112@853#dns.quad9.net'	\
+	'forward-addr: 1.1.1.1@853#cloudflare-dns.com'		\
+	'forward-addr: 1.0.0.1@853#cloudflare-dns.com'		\
+	>>	'/var/unbound/etc/unbound.conf'
+
+# nsd
+cp	-a	'/var/nsd/etc/nsd.conf'		\
+		'/etc/examples/nsd.conf'
+sed	-e				\
+	'/^server/ a\
+	ip-address: 127.0.0.1@5678'	\
+	'/var/nsd/etc/nsd.conf'		\
+	>	'/etc/nsd/conf'
+
+rcctl	enable	nsd
+rcctl	start	nsd
+
+# vim: ts=8:sw=8:sts=8:noet:ft=sh
