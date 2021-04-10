@@ -107,6 +107,9 @@ pfctl	-f	'/etc/pf.conf'
 cp	-a	'/var/unbound/etc/unbound.conf'	\
 		'/etc/examples/unbound.conf'
 sed	-e	's/#tls-cert-bundle/tls-cert-bundle/'	\
+	-e	'/127.0.0.0\/8 alow/ a\
+	access-control: 10.0.0.0/8 allow\
+'							\
 	-e	'/hide-identity/ i\
 	do-not-query-localhost: no\
 \
