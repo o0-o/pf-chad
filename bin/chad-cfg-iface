@@ -52,16 +52,16 @@ done
 # discover environment
 : ${vlan:=false}
 typeset	iface_cfg="hostname.${iface}"
+: ${site:=$(	ifconfig					|
+		grep -m 1 'inet 10'				|
+		awk '{print $2}'				|
+		cut -d '.' -f 2						)}
 typeset	ipv4="10.${site}.${subnet}.$(( $RANDOM%199 +1 ))"
 typeset	domain=$(	hostname				|
 			rev					|
 			cut -d '.' -f -2			|
 			rev						)
 typeset fqdn="${name}.${domain}"
-: ${site:=$(	ifconfig					|
-		grep -m 1 'inet 10'				|
-		awk '{print $2}'				|
-		cut -d '.' -f 2						)}
 typeset	nameservers:=$(	grep "interface:[[:space:]]*10"			\
 				'/var/unbound/etc/unbound.conf'	|
 			cut -d ' ' -f 2					)
