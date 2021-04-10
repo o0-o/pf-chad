@@ -177,7 +177,7 @@ printf	'\t\t%s )\t; %s\n\n'				\
 	>>	"/var/nsd/zones/master/${fqdn}"
 # name servers
 printf	'@\tIN\tNS\t%s.\n'				\
-	"${fqdn}"					\
+	"$(hostname -s).${fqdn}"			\
 	>>	"/var/nsd/zones/master/${fqdn}"
 # records
 printf	'%s\tIN\t%s\t%s\n'				\
