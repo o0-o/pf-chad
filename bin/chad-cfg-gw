@@ -74,6 +74,7 @@ printf	'%s\n'			\
 	>	'/etc/mygate'
 
 # install most updated pf-chad rules
+which	git	||
 pkg_add	git
 [ ! -e '/tmp/pf-chad' ]		||
 rm	-rf	'/tmp/pf-chad'
