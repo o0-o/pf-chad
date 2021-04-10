@@ -70,7 +70,7 @@ printf	'%s | %s\n'					\
 
 # default gateway
 printf	'%s\n'			\
-	"${hop}"		\
+	"${next_hop}"		\
 	>	'/etc/mygate'
 
 # install most updated pf-chad rules
