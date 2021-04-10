@@ -7,7 +7,7 @@ Block like a chad with pf-chad
 * NSD authoritative A records corresponding to static DHCP reservations
 * Randomized gateway addresses
 
-Linux is flirting with your internet. Take it's heart, then block its advances like a true bsd chad.
+Linux is flirting with your internet. Steal it's heart, then block its advances like a true bsd chad.
 
 ---
 
