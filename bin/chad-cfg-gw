@@ -112,4 +112,9 @@ sed	-e				\
 rcctl	enable	nsd
 rcctl	start	nsd
 
+printf	'%s\n'				\
+	'nameserver 127.0.0.1'		\
+	'lookup file bind'		\
+	>	'/etc/resolv.conf'
+
 # vim: ts=8:sw=8:sts=8:noet:ft=sh
