@@ -107,9 +107,6 @@ pfctl	-f	'/etc/pf.conf'
 cp	-a	'/var/unbound/etc/unbound.conf'	\
 		'/etc/examples/unbound.conf'
 sed	-e	's/#tls-cert-bundle/tls-cert-bundle/'	\
-	-e	'/127.0.0.0\/8 alow/ a\
-	access-control: 10.0.0.0/8 allow\
-'							\
 	-e	'/hide-identity/ i\
 	do-not-query-localhost: no\
 \
@@ -154,5 +151,9 @@ printf	'%s\n'				\
 	>	'/etc/resolv.conf'
 
 sh	'/etc/netstart'
+
+# enable packet forwarding
+echo	'net.inet.ip.forwarding=1'	>>	'/etc/sysctl.conf'
+sysctl	-w	'net.inet.ip.forwarding=1'
 
 # vim: ts=8:sw=8:sts=8:noet:ft=sh
