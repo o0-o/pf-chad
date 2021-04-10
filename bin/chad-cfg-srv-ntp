@@ -1,0 +1,25 @@
+#!/usr/bin/env sh
+# Usage:
+
+set -euo pipefail
+set -x
+
+# parse aguments
+while [ ! -z ${1-} ]; do
+	case "$1" in
+		--iface)
+			typeset iface=$2
+			shift 2
+			;;
+		*)
+			echo "Not recognized: $1" >&2
+			exit 1
+			;;
+	esac
+done
+
+echo	"!pfctl -t ntp-s -T add ${iface}"	\
+	>>	"/etc/hostname.${iface}"
+sh	'/etc/netstart'	$iface
+
+# vim: ts=8:sw=8:sts=8:noet:ft=zsh
