@@ -1,0 +1,52 @@
+#!/usr/bin/env sh
+# Usage:
+
+set -euo pipefail
+set -x
+
+# parse aguments
+while [ ! -z ${1-} ]; do
+	case "$1" in
+		--iface)
+			typeset iface=$2
+			shift 2
+			;;
+		*)
+			echo "Not recognized: $1" >&2
+			exit 1
+			;;
+	esac
+done
+
+typeset	net=$(	awk	'/^inet / { print $2 }'		\
+			"/etc/hostname.${iface}"		)
+typeset	ipv4=$(	echo	$net				|
+		cut	-d	'/'	-f	1		)
+typeset	net=$(	echo	$net		|
+		sed	's@[0-9]*/@0/@'		)
+
+typeset	ts=$(date +%Y%m%d%H%M%S)
+cp	-a	'/var/unbound/etc/unbound.conf'		\
+		"/var/unbound/etc/.unbound.conf.${ts}"
+sed	-e	'/^server:/ a\
+	interface: '"${ipv4}"'\
+'	"/var/unbound/etc/.unbound.conf.${ts}"	\
+	>	'/var/unbound/etc/unbound.conf'
+unbound-checkconf
+rcctl	restart unbound
+
+typeset	ts=$(date +%Y%m%d%H%M%S)
+cp	-a	'/etc/dhcpd.conf'		\
+		"/etc/.dhcpd.conf.${ts}"
+sed	-e	's/9.9.9.9/'"${ipv4}"'/'	\
+	"/etc/.dhcpd.conf.${ts}"		\
+	>	'/etc/dhcpd.conf'
+rcctl	restart	dhcpd
+
+echo	"!pfctl -t dns-s -T add ${iface}"	\
+	>>	"/etc/hostname.${iface}"
+sh	'/etc/netstart'	$iface
+
+host	quad9.net	$ipv4
+
+# vim: ts=8:sw=8:sts=8:noet:ft=zsh
