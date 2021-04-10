@@ -76,7 +76,7 @@ grep	-q "^up$"	"/etc/${iface_cfg}"		||
 	sed	-e '1iup'	"/etc/${iface_cfg}"
 }
 # if vlan, switch to vlan conf file
-$vlan	&&
+! $vlan	||
 {	typeset	iface_cfg="hostname.vlan${subnet}"
 	# interface
 	printf	'%s\n'					\
@@ -91,8 +91,8 @@ printf	'%s\n'				\
 	'lladdr random'			\
 	"inet ${ipv4}/24"		\
 	>>	"/etc/${iface_cfg}"
-[ ! -z ${description-} ]		&&
-printf	'%s | %s\n'			\
+[ -z ${description-} ]			||
+printf	'%s\n'				\
 	"description ${description}"	\
 	>>	"/etc/${iface_cfg}"
 
@@ -140,6 +140,7 @@ printf	'\t\t}\n\t}\n}\n'						\
 sed -e	'/dhcpd_flags/ { s/$/ '"${iface}"'/; }'	\
 	'/etc/rc.conf.local'			\
 	>	'/etc/rc.conf.local'
+rcctl	enable	dhcpd
 rcctl	restart dhcpd
 printf	'%s\n'	"dhcp for ${iface} configured successfully."	>&2
 
@@ -173,6 +174,7 @@ print	'%s\tIN\t%s\t%s\n'				\
 	>>	"/var/nsd/zones/master/${domain}"
 nsd-checkzone	"${domain}"	"/var/nsd/zones/master/${domain}"
 rcctl	restart nsd
+
 # unbound
 sed -e							\
 '/root-hints/ i\
