@@ -42,6 +42,12 @@ sed	-e	's/9.9.9.9/'"${ipv4}"'/'	\
 	"/etc/.dhcpd.conf.${ts}"		\
 	>	'/etc/dhcpd.conf'
 rcctl	restart	dhcpd
+cp	-a	'/etc/resolv.conf'		\
+		"/etc/.resolv.conf.${ts}"
+sed	-e	's/9.9.9.9/'"${ipv4}"'/'	\
+	"/etc/.resolv.conf.${ts}"		\
+	>	'/etc/resolv.conf'
+sh	'/etc/netstart'
 
 echo	"!pfctl -t dns-s -T add ${iface}"	\
 	>>	"/etc/hostname.${iface}"
