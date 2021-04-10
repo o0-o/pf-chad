@@ -142,10 +142,10 @@ printf	'\n\t}\n}\n'							\
 typeset	ts="$(date +%Y%m%d%H%M%S)"
 cp	-a	'/etc/rc.conf.local'		\
 		"/etc/.rc.conf.local.${ts}"
+rcctl	enable	dhcpd
 sed	-e	'/dhcpd_flags/ { s/$/ '"${iface}"'/; }'	\
 	"/etc/.rc.conf.local.${ts}"				\
 	>	'/etc/rc.conf.local'
-rcctl	enable	dhcpd
 rcctl	restart dhcpd
 printf	'%s\n'	"dhcp for ${iface} configured successfully."	>&2
 
