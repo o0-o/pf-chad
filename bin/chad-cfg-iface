@@ -5,6 +5,7 @@
 #		--tables dhcp-c,dns-c,ntp-c,wan-c
 
 set -euo pipefail
+set -x
 
 # parse aguments
 while [ ! -z ${1-} ]; do
@@ -53,7 +54,9 @@ done
 typeset	iface_cfg="hostname.${iface}"
 typeset	ipv4="10.${site}.${subnet}.$(( $RANDOM%199 +1 ))"
 typeset	domain=$(	hostname				|
-			cut -d '.' -f 2-				)
+			rev					|
+			cut -d '.' -f -2			|
+			rev						)
 typeset fqdn="${name}.${domain}"
 : ${site:=$(	ifconfig					|
 		grep -m 1 'inet 10'				|
