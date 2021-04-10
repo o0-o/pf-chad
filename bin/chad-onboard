@@ -65,7 +65,7 @@ set -x
 #		$mirror_dev
 
 # hardening
-rcctl	set	accounting status on
+rcctl	enable	accounting
 sysctl	-w	vm.malloc_conf=CFGU
 sysctl	-w	ddb.panic=0
 printf	'%s\n'				\
