@@ -133,9 +133,11 @@ cp	-a	'/var/nsd/etc/nsd.conf'		\
 		'/etc/examples/nsd.conf'
 sed	-e				\
 	'/^server/ a\
-	ip-address: 127.0.0.1@5678'	\
+	ip-address: 127.0.0.1@5678\
+'					\
 	'/etc/examples/nsd.conf'	\
 	>	'/var/nsd/etc/nsd.conf'
+nsd-checkconf	'/var/nsd/etc/nsd.conf'
 rcctl	enable	nsd
 rcctl	start	nsd
 

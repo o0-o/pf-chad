@@ -136,19 +136,24 @@ printf	'\t\toption %s %s;\n'						\
 printf	'\t\trange %s %s;\n'						\
 	"10.${site}.${subnet}.200"	"10.${site}.${subnet}.254"	\
 	>>	'/etc/dhcpd.conf'
-printf	'\t\t}\n\t}\n}\n'						\
+printf	'\n\t}\n}\n'							\
 	>>	'/etc/dhcpd.conf'
-sed -e	'/dhcpd_flags/ { s/$/ '"${iface}"'/; }'	\
-	'/etc/rc.conf.local'			\
+# enable dhcpd for the new interface
+typeset	ts="$(date +%Y%m%d%H%M%S)"
+cp	-a	'/etc/rc.conf.local'		\
+		"/etc/.rc.conf.local.${ts}"
+sed	-e	'/dhcpd_flags/ { s/$/ '"${iface}"'/; }'	\
+	"/etc/.rc.conf.local.${ts}"				\
 	>	'/etc/rc.conf.local'
 rcctl	enable	dhcpd
 rcctl	restart dhcpd
 printf	'%s\n'	"dhcp for ${iface} configured successfully."	>&2
 
 # nsd
-printf	'zone:\n\tname: "%1$s"\n\tzonefile: "master/%1$s"\n\n'	\
-	"${fqdn}"						\
+printf	'zone:\n\tname: "%s"\n\tzonefile: "master/%s"\n\n'	\
+	"${fqdn}"	"${fqdn}"				\
 	>>	'/var/nsd/etc/nsd.conf'
+nsd-checkconf	'/var/nsd/etc/nsd.conf'
 # zone file
 printf	'$ORIGIN\t\t\t%s.\n$TTL\t4h\n\n'	\
 	"${domain}"				\
@@ -170,20 +175,23 @@ printf	'@\tIN\tNS\t%s.\n'				\
 	"${fqdn}"					\
 	>>	"/var/nsd/zones/master/${domain}"
 # records
-print	'%s\tIN\t%s\t%s\n'				\
+printf	'%s\tIN\t%s\t%s\n'				\
 	"${name}"	'A'	"${ipv4}"		\
 	>>	"/var/nsd/zones/master/${domain}"
 nsd-checkzone	"${domain}"	"/var/nsd/zones/master/${domain}"
 rcctl	restart nsd
 
 # unbound
+typeset	ts="$(date +%Y%m%d%H%M%S)"
+cp	-a	'/var/unbound/etc/unbound.conf'		\
+		"/var/unbound/etc/.unbound.conf.${ts}"
 sed -e							\
 '/root-hints/ i\
 	local-zone: "'"${domain}"'" "transparent"\
 	domain-insecure: "'"${domain}"'\
 	access-control: '"10.${site}.${subnet}.0/24"' allow\
 \
-'	'/var/unbound/etc/unbound.conf'			\
+'	"/var/unbound/etc/.unbound.conf.${ts}"			\
 	>	'/var/unbound/etc/unbound.conf'
 printf	'\nstub-zone:\n\tname: "%s"\n\tstub-addr: %s\n\tstub-no-cache: yes\n' \
 	"${domain}"	'127.0.0.1@5678'				\
