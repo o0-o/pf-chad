@@ -156,11 +156,11 @@ printf	'zone:\n\tname: "%s"\n\tzonefile: "master/%s"\n\n'	\
 nsd-checkconf	'/var/nsd/etc/nsd.conf'
 # zone file
 printf	'$ORIGIN\t\t\t%s.\n$TTL\t4h\n\n'	\
-	"${domain}"				\
-	>	"/var/nsd/zones/master/${domain}"
+	"${fqdn}"				\
+	>	"/var/nsd/zones/master/${fqdn}"
 printf	'@\tIN\tSOA\t%s. hostmaster.%s. (\n'		\
 	"${fqdn}"	"${domain}"			\
-	>>	"/var/nsd/zones/master/${domain}"
+	>>	"/var/nsd/zones/master/${fqdn}"
 printf	'\t\t%s\t; %s\n'				\
 	"$(date +%y%m%d%H%M)"	'serial'		\
 	'1h'			'refresh'		\
