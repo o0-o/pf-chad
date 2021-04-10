@@ -62,12 +62,9 @@ typeset fqdn="${name}.${domain}"
 		grep -m 1 'inet 10'				|
 		awk '{print $2}'				|
 		cut -d '.' -f 2						)}
-typeset nameservers=$(	dig "ns.${domain}"			|
-			grep "^ns.${domain}"			|
-			awk '{ print $NF }'				)
-: ${nameservers:=$(	grep "interface:[[:space:]]*10"			\
+typeset	nameservers:=$(	grep "interface:[[:space:]]*10"			\
 				'/var/unbound/etc/unbound.conf'	|
-			cut -d ' ' -f 2					)}
+			cut -d ' ' -f 2					)
 : ${nameservers:=$(	grep 'nameserver[[:space:]]*10'		\
 				'/etc/resolv.conf'		|
 			cut -d ' ' -f 2					)}
@@ -95,7 +92,7 @@ printf	'%s\n'				\
 	'lladdr random'			\
 	"inet ${ipv4}/24"		\
 	>>	"/etc/${iface_cfg}"
-[ -z ${description-} ]			||
+[ -z "${description-}" ]		||
 printf	'%s\n'				\
 	"description ${description}"	\
 	>>	"/etc/${iface_cfg}"
@@ -127,7 +124,7 @@ printf	'shared-network %s {\n'						\
 	"${name}"							\
 	>>	'/etc/dhcpd.conf'
 printf	'\toption %s %s;\n'						\
-	'domain-name'		"\"${name}.${domain}\""			\
+	'domain-name'		"\"${fqdn}\""				\
 	'domain-name-servers'	"$(echo ${nameservers} | sed 's/ /, /')"\
 	>>	'/etc/dhcpd.conf'
 printf	'\tsubnet 10.%s.%s.0 netmask 255.255.255.0 {\n'			\
@@ -169,19 +166,19 @@ printf	'\t\t%s\t; %s\n'				\
 	'1h'			'refresh'		\
 	'30m'			'retry'			\
 	'7d'			'expire'		\
-	>>	"/var/nsd/zones/master/${domain}"
+	>>	"/var/nsd/zones/master/${fqdn}"
 printf	'\t\t%s )\t; %s\n\n'				\
 	'1h'	'negative'				\
-	>>	"/var/nsd/zones/master/${domain}"
+	>>	"/var/nsd/zones/master/${fqdn}"
 # name servers
 printf	'@\tIN\tNS\t%s.\n'				\
 	"${fqdn}"					\
-	>>	"/var/nsd/zones/master/${domain}"
+	>>	"/var/nsd/zones/master/${fqdn}"
 # records
 printf	'%s\tIN\t%s\t%s\n'				\
-	"${name}"	'A'	"${ipv4}"		\
-	>>	"/var/nsd/zones/master/${domain}"
-nsd-checkzone	"${domain}"	"/var/nsd/zones/master/${domain}"
+	"$(hostname -s)"	'A'	"${ipv4}"		\
+	>>	"/var/nsd/zones/master/${fqdn}"
+nsd-checkzone	"${fqdn}"	"/var/nsd/zones/master/${fqdn}"
 rcctl	restart nsd
 
 # unbound
@@ -189,9 +186,9 @@ typeset	ts="$(date +%Y%m%d%H%M%S)"
 cp	-a	'/var/unbound/etc/unbound.conf'		\
 		"/var/unbound/etc/.unbound.conf.${ts}"
 sed -e							\
-'/root-hints/ i\
-	local-zone: "'"${domain}"'" "transparent"\
-	domain-insecure: "'"${domain}"'\
+'/hide-version/ i\
+	private-zone: "'"${fqdn}"'"\
+	domain-insecure: "'"${fqdn}"'\
 	access-control: '"10.${site}.${subnet}.0/24"' allow\
 \
 '	"/var/unbound/etc/.unbound.conf.${ts}"			\
