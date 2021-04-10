@@ -41,10 +41,11 @@ done
 typeset	iface_cfg="hostname.${iface}"
 grep	-q "^up$"	"/etc/${iface_cfg}"		||
 {	touch			"/etc/${iface_cfg}"
-	sed	-e '1iup'	"/etc/${iface_cfg}"
+	mv	"/etc/${iface_cfg}"	'/tmp'
+	sed	-e '1iup'	"/tmp/${iface_cfg}"	"/etc/${iface_cfg}"
 }
 # if vlan, switch to vlan conf file
-! $vlan	||
+[ -z ${vlan-} ]	||
 {	typeset	iface_cfg="hostname.vlan${vlan}"
 	# interface
 	printf	'%s\n'					\
@@ -73,6 +74,15 @@ printf	'%s\n'			\
 	"${next_hop}"		\
 	>	'/etc/mygate'
 
+# temporarily use quadnine
+printf	'%s\n'				\
+	'nameserver 9.9.9.9'		\
+	'lookup file bind'		\
+	>	'/etc/resolv.conf'
+
+# bring up the network
+sh	'/etc/netstart'
+
 # install most updated pf-chad rules
 which	git	||
 pkg_add	git
@@ -90,10 +100,15 @@ rm -rf '/tmp/pf-chad'
 printf	'%s\n'					\
 	"!pfctl -t wan-c -T add ${iface}"	\
 	>>	"/etc/${iface_cfg}"
+pfctl	-nf	'/etc/pf.conf'	&&
+pfctl	-f	'/etc/pf.conf'
 
 # unbound
 cp	-a	'/var/unbound/etc/unbound.conf'	\
 		'/etc/examples/unbound.conf'
+sed	-e	's/#tls-cert-bundle/tls-cert-bundle/'	\
+	'/etc/examples/unbound.conf'			\
+	>	'/var/unbound/etc/unbound.conf'
 printf	'%s\n'					\
 	'forward-zone:'				\
 	>>	'/var/unbound/etc/unbound.conf'
@@ -106,6 +121,12 @@ printf	'\t%s\n'						\
 	'forward-addr: 1.1.1.1@853#cloudflare-dns.com'		\
 	'forward-addr: 1.0.0.1@853#cloudflare-dns.com'		\
 	>>	'/var/unbound/etc/unbound.conf'
+ftp	-S	do					\
+	-o	'/var/unbound/db/root.hints'		\
+	'https://www.internic.net/domain/named.root'
+unbound-checkconf
+rcctl	enable	unbound
+rcctl	start	unbound
 
 # nsd
 cp	-a	'/var/nsd/etc/nsd.conf'		\
@@ -113,15 +134,17 @@ cp	-a	'/var/nsd/etc/nsd.conf'		\
 sed	-e				\
 	'/^server/ a\
 	ip-address: 127.0.0.1@5678'	\
-	'/var/nsd/etc/nsd.conf'		\
-	>	'/etc/nsd/conf'
-
+	'/etc/examples/nsd.conf'	\
+	>	'/var/nsd/etc/nsd.conf'
 rcctl	enable	nsd
 rcctl	start	nsd
 
+# use local resolver
 printf	'%s\n'				\
 	'nameserver 127.0.0.1'		\
 	'lookup file bind'		\
 	>	'/etc/resolv.conf'
+
+sh	'/etc/netstart'
 
 # vim: ts=8:sw=8:sts=8:noet:ft=sh
