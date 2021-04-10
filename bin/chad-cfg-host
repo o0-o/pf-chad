@@ -25,7 +25,7 @@ while [ ! -z ${1-} ]; do
 	esac
 done
 
-typeset	dhcpd_block=$(	sed	-ne	'/shared-network net/ {
+typeset	dhcpd_block=$(	sed	-ne	'/shared-network '"${net}"'/ {
 						:loop
 						p
 						n
@@ -90,4 +90,4 @@ nsd-checkzone	"${zone}"	"/var/nsd/zones/master/${zone}"
 rcctl	reload	nsd
 host	"${name}.${zone}"
 
-# vim: ds=8:sw=8:sts=8:noet:ft=zsh
+# vim: ts=8:sw=8:sts=8:noet:ft=zsh
