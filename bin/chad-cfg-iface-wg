@@ -1,0 +1,171 @@
+#!/usr/bin/env sh
+# Usage:
+
+set -euo pipefail
+set -x
+
+# parse aguments
+while [ ! -z ${1-} ]; do
+	case "$1" in
+		--subnet)
+			typeset subnet=$2
+			shift 2
+			;;
+		--name)
+			typeset name=$2
+			shift 2
+			;;
+		--site)
+			typeset site=$2
+			shift 2
+			;;
+		--groups)
+			typeset groups=$(echo $2 | sed -e 's/,/ /g')
+			shift 2
+			;;
+		--description)
+			typeset description=$2
+			shift 2
+			;;
+		--tables)
+			typeset tables=$(echo $2 | sed -e 's/,/ /g')
+			shift 2
+			;;
+		*)
+			echo "Not recognized: $1" >&2
+			exit 1
+			;;
+	esac
+done
+
+# discover environment
+typeset	iface="wg${subnet}"
+typeset	iface_cfg="hostname.${iface}"
+typeset	ipv4="10.${site}.${subnet}.$(( $RANDOM%199 +1 ))"
+typeset	domain=$(	hostname				|
+			rev					|
+			cut -d '.' -f -2			|
+			rev						)
+typeset fqdn="${name}.${domain}"
+[ ! -z "${site-}" ]							     ||
+typeset	site=$(	ifconfig					|
+		grep -m 1 'inet 10'				|
+		awk '{print $2}'				|
+		cut -d '.' -f 2						)}
+typeset	nameservers:=$(	grep "interface:[[:space:]]*10"			\
+				'/var/unbound/etc/unbound.conf'	|
+			cut -d ' ' -f 2					)
+: ${nameservers:=$(	grep 'nameserver[[:space:]]*10'		\
+				'/etc/resolv.conf'		|
+			cut -d ' ' -f 2					)}
+: ${nameservers:=9.9.9.9}
+
+# install wireguard if not installed already
+which	wg		||
+pkg_add	wireguard-tools
+install	-d	-m	700	'/etc/wg'
+
+# generate keys
+typeset	pvk=$(	wg	genkey	)
+typeset	pubk=$(	echo	"${pvk}"	|
+		wg	pubkey			)
+typeset	port=$(( 46000 + $subnet ))
+
+# configure wg server
+printf	'%s\n'					\
+	'[Interface]'				\
+	"PrivateKey = ${pvk}"			\
+	"ListenPort = ${port}"			\
+	''					\
+	>	"/etc/wg/wg${subnet}.conf"
+
+# configure wg interface
+printf	'%s\n'								\
+	'up'								\
+	"inet ${ipv4}/24"						\
+	"!/usr/local/bin/wg setconf wg${subnet} /etc/wg/wg${subnet}.conf"
+	>>	"/etc/${iface_cfg}"
+[ -z "${description-}" ]		||
+printf	'%s\n'				\
+	"description '${description}'"	\
+	>>	"/etc/${iface_cfg}"
+
+# groups
+echo	"group ${name}"			\
+	>>	"/etc/${iface_cfg}"
+for g in ${groups-}; do
+	echo	"group ${g}"			\
+		>>	"/etc/${iface_cfg}"
+done
+
+# antispoof rule
+printf	'%s | %s\n'					\
+	"!echo 'antispoof quick log for ${iface}'"	\
+	"pfctl -a ${iface} -f -"			\
+	>>	"/etc/${iface_cfg}"
+# ping
+printf	'%s | %s\n'							\
+	"!echo 'pass in on ${iface} inet proto icmp to ${iface}'"	\
+	"pfctl -a ${iface} -f -"					\
+	>>	"/etc/${iface_cfg}"
+
+# pf tables
+for t in ${tables-}; do
+	echo	"!pfctl -t ${t} -T add ${iface}:network"	\
+		>>	"/etc/${iface_cfg}"
+done
+sh '/etc/netstart' "${iface}"
+printf	'%s\n'	"network for ${iface} configured successfully."	>&2
+
+# nsd
+printf	'zone:\n\tname: "%s"\n\tzonefile: "master/%s"\n\n'	\
+	"${fqdn}"	"${fqdn}"				\
+	>>	'/var/nsd/etc/nsd.conf'
+nsd-checkconf	'/var/nsd/etc/nsd.conf'
+# zone file
+printf	'$ORIGIN\t\t\t%s.\n$TTL\t4h\n\n'	\
+	"${fqdn}"				\
+	>	"/var/nsd/zones/master/${fqdn}"
+printf	'@\tIN\tSOA\t%s. hostmaster.%s. (\n'		\
+	"${fqdn}"	"${domain}"			\
+	>>	"/var/nsd/zones/master/${fqdn}"
+printf	'\t\t%s\t; %s\n'				\
+	"$(date +%y%m%d%H%M)"	'serial'		\
+	'1h'			'refresh'		\
+	'30m'			'retry'			\
+	'7d'			'expire'		\
+	>>	"/var/nsd/zones/master/${fqdn}"
+printf	'\t\t%s )\t; %s\n\n'				\
+	'1h'	'negative'				\
+	>>	"/var/nsd/zones/master/${fqdn}"
+# name servers
+printf	'@\tIN\tNS\t%s.\n'				\
+	"$(hostname -s).${fqdn}"			\
+	>>	"/var/nsd/zones/master/${fqdn}"
+# records
+printf	'%s\tIN\t%s\t%s\n'				\
+	"$(hostname -s)"	'A'	"${ipv4}"		\
+	>>	"/var/nsd/zones/master/${fqdn}"
+nsd-checkzone	"${fqdn}"	"/var/nsd/zones/master/${fqdn}"
+rcctl	restart nsd
+
+# unbound
+typeset	ts="$(date +%Y%m%d%H%M%S)"
+cp	-a	'/var/unbound/etc/unbound.conf'		\
+		"/var/unbound/etc/.unbound.conf.${ts}"
+sed -e							\
+'/hide-version/ i\
+	private-domain: "'"${fqdn}"'"\
+	domain-insecure: "'"${fqdn}"'"\
+	access-control: '"10.${site}.${subnet}.0/24"' allow\
+\
+'	"/var/unbound/etc/.unbound.conf.${ts}"			\
+	>	'/var/unbound/etc/unbound.conf'
+printf	'\nstub-zone:\n\tname: "%s"\n\tstub-addr: %s\n\tstub-no-cache: yes\n' \
+	"${fqdn}"	'127.0.0.1@5678'				\
+	>>	'/var/unbound/etc/unbound.conf'
+unbound-checkconf
+rcctl	restart unbound
+printf	'%s\n'	"dns for ${iface} configured successfully."	>&2
+
+# vim: ts=8:sw=8:sts=8:noet:ft=zsh
