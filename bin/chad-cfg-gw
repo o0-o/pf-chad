@@ -107,7 +107,10 @@ pfctl	-f	'/etc/pf.conf'
 cp	-a	'/var/unbound/etc/unbound.conf'	\
 		'/etc/examples/unbound.conf'
 sed	-e	's/#tls-cert-bundle/tls-cert-bundle/'	\
-	'/etc/examples/unbound.conf'			\
+	-e	'/hide-identity/ i\
+	do-not-query-localhost: no\
+\
+'	'/etc/examples/unbound.conf'			\
 	>	'/var/unbound/etc/unbound.conf'
 printf	'%s\n'					\
 	'forward-zone:'				\
