@@ -18,7 +18,10 @@ while [ ! -z ${1-} ]; do
 	esac
 done
 
-echo	"listen on ${iface}"	>>	'/etc/ntpd.conf'
+typeset	ipv4=$(	awk	'/^inet / { print $2 }'		\
+			"/etc/hostname.${iface}"	|
+		cut	-d	'/'	-f	1		)
+echo	"listen on ${ipv4}"	>>	'/etc/ntpd.conf'
 rcctl	restart	ntpd
 
 echo	"!pfctl -t ntp-s -T add ${iface}"	\
