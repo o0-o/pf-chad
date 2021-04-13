@@ -29,7 +29,7 @@ typeset	dhcpd_block=$(	sed	-ne	'/shared-network '"${net}"'/ {
 						:loop
 						p
 						n
-						/}/ {
+						/^}/ {
 							p
 							q
 						}
@@ -48,9 +48,9 @@ typeset	net_octets=$(	echo	"${dhcpd_block}"		|
 typeset host_octet=1
 # find first available ip address
 while [ -z ${ipv4-} ]; do
-	echo	"${dhcpd_block}"			|
-	grep	"${net_octets}.${host_octet}[[:blank:];]"		&&
-	typeset	host_octet=$(( $host_octet + 1 ))	||
+	echo	"${dhcpd_block}"				|
+	grep	"${net_octets}.${host_octet}[[:blank:];]"	&&
+	typeset	host_octet=$(( $host_octet + 1 ))		||
 	typeset	ipv4="${net_octets}.${host_octet}"
 	[ $host_octet = 200 ]	&&
 	{	printf	'%s\n'	'No available addresses'	>&2

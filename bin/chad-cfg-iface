@@ -105,14 +105,21 @@ for g in ${groups-}; do
 		>>	"/etc/${iface_cfg}"
 done
 
+# allow dhcp
+printf	'%s %s | %s\n'						\
+	"!echo 'pass in quick on ${iface} inet proto udp"	\
+	"from port bootps to ${iface} port bootpc'"		\
+	"pfctl -a ${iface} -f -"				\
+	>>	"/etc/${iface_cfg}"
 # antispoof rule
 printf	'%s | %s\n'					\
 	"!echo 'antispoof quick log for ${iface}'"	\
 	"pfctl -a ${iface} -f -"			\
 	>>	"/etc/${iface_cfg}"
 # ping
-printf	'%s | %s\n'							\
-	"!echo 'pass in on ${iface} inet proto icmp to ${iface}'"	\
+printf	'%s %s | %s\n'							\
+	"!echo 'pass in on ${iface} inet proto icmp to ${iface}"	\
+	"icmp-type echoreq keep state"					\
 	"pfctl -a ${iface} -f -"					\
 	>>	"/etc/${iface_cfg}"
 
@@ -121,6 +128,8 @@ for t in ${tables-}; do
 	echo	"!pfctl -t ${t} -T add ${iface}:network"	\
 		>>	"/etc/${iface_cfg}"
 done
+echo	"!pfctl -t dhcp-s -T add ${iface}"	\
+	>>	"/etc/${iface_cfg}"
 sh '/etc/netstart' "${iface}"
 printf	'%s\n'	"network for ${iface} configured successfully."	>&2
 

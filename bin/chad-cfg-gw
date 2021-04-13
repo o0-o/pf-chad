@@ -39,10 +39,14 @@ done
 
 # set edge/wan interface to up
 typeset	iface_cfg="hostname.${iface}"
-grep	-q "^up$"	"/etc/${iface_cfg}"		||
-{	touch			"/etc/${iface_cfg}"
-	mv	"/etc/${iface_cfg}"	'/tmp'
-	sed	-e '1iup'	"/tmp/${iface_cfg}"	"/etc/${iface_cfg}"
+[ -e "/etc/${iface_cfg}" ]			||
+echo	'up'	>	"/etc/${iface_cfg}"
+grep	-q "^up$"	"/etc/${iface_cfg}"	||
+{	cp	-a	"/etc/${iface_cfg}"	\
+			"/tmp/${iface_cfg}"
+	sed	-e	'1i\
+up\
+'	>	"/etc/${iface_cfg}"
 }
 # if vlan, switch to vlan conf file
 [ -z ${vlan-} ]	||
@@ -61,7 +65,7 @@ printf	'%s\n'					\
 	"inet ${ipv4}/${mask}"			\
 	>>	"/etc/${iface_cfg}"
 printf	'%s\n'					\
-	"description ${description-WAN}"	\
+	"description '${description-WAN}'"	\
 	>>	"/etc/${iface_cfg}"
 # antispoof rule
 printf	'%s | %s\n'					\
@@ -82,6 +86,7 @@ printf	'%s\n'				\
 
 # bring up the network
 sh	'/etc/netstart'
+ping	-c	1	9.9.9.9
 
 # install most updated pf-chad rules
 which	git	||
@@ -127,9 +132,18 @@ printf	'\t%s\n'						\
 ftp	-S	do					\
 	-o	'/var/unbound/db/root.hints'		\
 	'https://www.internic.net/domain/named.root'
+unbound-anchor	-a	"/var/unbound/db/root.key"
 unbound-checkconf
 rcctl	enable	unbound
 rcctl	start	unbound
+
+# use local resolver
+printf	'%s\n'				\
+	'nameserver 127.0.0.1'		\
+	'lookup file bind'		\
+	>	'/etc/resolv.conf'
+sh	'/etc/netstart'
+host	quad9.net
 
 # nsd
 cp	-a	'/var/nsd/etc/nsd.conf'		\
@@ -143,14 +157,6 @@ sed	-e				\
 nsd-checkconf	'/var/nsd/etc/nsd.conf'
 rcctl	enable	nsd
 rcctl	start	nsd
-
-# use local resolver
-printf	'%s\n'				\
-	'nameserver 127.0.0.1'		\
-	'lookup file bind'		\
-	>	'/etc/resolv.conf'
-
-sh	'/etc/netstart'
 
 # enable packet forwarding
 echo	'net.inet.ip.forwarding=1'	>>	'/etc/sysctl.conf'
