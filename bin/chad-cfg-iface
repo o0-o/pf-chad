@@ -81,6 +81,7 @@ grep	-q "^up$"	"/etc/${iface_cfg}"	||
 up\
 '	>	"/etc/${iface_cfg}"
 }
+sh '/etc/netstart' "${iface}"
 # if vlan, switch to vlan conf file
 ! $vlan	||
 {	typeset	iface_cfg="hostname.vlan${subnet}"
@@ -133,8 +134,6 @@ for t in ${tables-}; do
 	echo	"!pfctl -t ${t} -T add ${iface}:network"	\
 		>>	"/etc/${iface_cfg}"
 done
-echo	"!pfctl -t dhcp-s -T add ${iface}"	\
-	>>	"/etc/${iface_cfg}"
 sh '/etc/netstart' "${iface}"
 printf	'%s\n'	"network for ${iface} configured successfully."	>&2
 
