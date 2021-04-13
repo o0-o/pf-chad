@@ -158,6 +158,9 @@ nsd-checkconf	'/var/nsd/etc/nsd.conf'
 rcctl	enable	nsd
 rcctl	start	nsd
 
+# enable but do not configure yet
+rcctl	enable dhcpd
+
 # enable packet forwarding
 echo	'net.inet.ip.forwarding=1'	>>	'/etc/sysctl.conf'
 sysctl	-w	'net.inet.ip.forwarding=1'
