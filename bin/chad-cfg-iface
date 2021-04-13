@@ -124,7 +124,7 @@ printf	'%s | %s\n'					\
 # ping
 printf	'%s %s | %s\n'							\
 	"!echo 'pass in on ${iface} inet proto icmp to ${iface}"	\
-	"icmp-type echoreq keep state"					\
+	"icmp-type echoreq keep state'"					\
 	"pfctl -a ${iface} -f -"					\
 	>>	"/etc/${iface_cfg}"
 
