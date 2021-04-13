@@ -71,10 +71,15 @@ typeset	nameservers:=$(	grep "interface:[[:space:]]*10"			\
 : ${nameservers:=9.9.9.9}
 
 # set interface to up
-grep	-q "^up$"	"/etc/${iface_cfg}"		||
-{	touch			"/etc/${iface_cfg}"
-	mv	"/etc/${iface_cfg}"	'/tmp'
-	sed	-e '1iup'	"/tmp/${iface_cfg}"	"/etc/${iface_cfg}"
+typeset	iface_cfg="hostname.${iface}"
+[ -e "/etc/${iface_cfg}" ]			||
+echo	'up'	>	"/etc/${iface_cfg}"
+grep	-q "^up$"	"/etc/${iface_cfg}"	||
+{	cp	-a	"/etc/${iface_cfg}"	\
+			"/tmp/${iface_cfg}"
+	sed	-e	'1i\
+up\
+'	>	"/etc/${iface_cfg}"
 }
 # if vlan, switch to vlan conf file
 ! $vlan	||
