@@ -18,6 +18,9 @@ while [ ! -z ${1-} ]; do
 	esac
 done
 
+echo	"listen on ${iface}"	>>	'/etc/ntpd.conf'
+rcctl	restart	ntpd
+
 echo	"!pfctl -t ntp-s -T add ${iface}"	\
 	>>	"/etc/hostname.${iface}"
 sh	'/etc/netstart'	$iface
