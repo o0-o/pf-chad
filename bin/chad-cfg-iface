@@ -2,7 +2,7 @@
 # Usage:
 # cfg_iface	--vlan --subnet 99 --name sales --iface em0 --site 23 \
 #		--groups lan --description 'Sales Dept' \
-#		--tables dhcp-c,dns-c,ntp-c,wan-c
+#		--tables sales,dns-c,ntp-c,wan-c
 
 set -euo pipefail
 set -x
@@ -62,13 +62,6 @@ typeset	domain=$(	hostname				|
 			cut -d '.' -f -2			|
 			rev						)
 typeset fqdn="${name}.${domain}"
-typeset	nameservers:=$(	grep "interface:[[:space:]]*10"			\
-				'/var/unbound/etc/unbound.conf'	|
-			cut -d ' ' -f 2					)
-: ${nameservers:=$(	grep 'nameserver[[:space:]]*10'		\
-				'/etc/resolv.conf'		|
-			cut -d ' ' -f 2					)}
-: ${nameservers:=9.9.9.9}
 
 # set interface to up
 typeset	iface_cfg="hostname.${iface}"
@@ -143,7 +136,6 @@ printf	'shared-network %s {\n'						\
 	>>	'/etc/dhcpd.conf'
 printf	'\toption %s %s;\n'						\
 	'domain-name'		"\"${fqdn}\""				\
-	'domain-name-servers'	"$(echo ${nameservers} | sed 's/ /, /')"\
 	>>	'/etc/dhcpd.conf'
 printf	'\tsubnet 10.%s.%s.0 netmask 255.255.255.0 {\n'			\
 	"${site}"	"${subnet}"					\
