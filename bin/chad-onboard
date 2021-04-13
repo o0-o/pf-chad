@@ -139,6 +139,8 @@ syspatch
 # ipmi
 [ -e  '/dev/ipmi'*  ]	&&
 pkg_add	ipmitool	&&
+cp	-a	'/bsd'		\
+		'/bsd.GENERIC'
 printf	'%s\n'		\
 	'enable ipmi'	\
 	'quit'		|
@@ -167,8 +169,6 @@ useradd	-m					\
 cp	-a	'/etc/examples/doas.conf'	\
 		'/etc/doas.conf'
 
-# disable root login
-
 # sensorsd
 cp	-a	'/etc/examples/sensorsd.conf'	\
 		'/etc/sensorsd.conf'
@@ -187,6 +187,6 @@ rcctl	start	sensorsd
 echo	"${sysadm}"
 echo	"${adm_pwd}"
 
-reboot	-n
+shutdown -r +1
 
 # vim: ts=8:sw=8:sts=8:noet:ft=sh
