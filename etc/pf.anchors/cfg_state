@@ -4,4 +4,4 @@ set	state-defaults	max 1500	\
 			max-src-conn 32	\
 			if-bound
 
-# vim: ts=8:sw=8:sts=8:noet
+# vim: ts=8:sw=8:sts=8:noet:ft=pf

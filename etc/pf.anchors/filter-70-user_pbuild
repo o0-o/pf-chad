@@ -3,4 +3,4 @@
 # port build user does not need network
 block	out	log	proto	{ tcp udp }	user	_pbuild
 
-# vim: ts=8:sw=8:sts=8:noet
+# vim: ts=8:sw=8:sts=8:noet:ft=pf

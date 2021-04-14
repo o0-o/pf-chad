@@ -6,4 +6,4 @@ pass	in	inet	proto	tcp			\
 	to	port	ftp				\
 	divert-to	127.0.0.1	port	8021
 
-# vim: ts=8:sw=8:sts=8:noet
+# vim: ts=8:sw=8:sts=8:noet:ft=pf

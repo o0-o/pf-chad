@@ -27,4 +27,4 @@ block	log	quick	on	egress			\
 block	log	quick	on	egress			\
 			to	<external-ping-abuse>
 
-# vim: ts=8:sw=8:sts=8:noet
+# vim: ts=8:sw=8:sts=8:noet:ft=pf

@@ -14,4 +14,4 @@ pass	in	on	egress	inet	proto	tcp		\
 		divert-to	127.0.0.1	port	spamd
 
 
-# vim: ts=8:sw=8:sts=8:noet
+# vim: ts=8:sw=8:sts=8:noet:ft=pf

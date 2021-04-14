@@ -70,7 +70,7 @@ printf	'%s\n'					\
 # antispoof rule
 printf	'%s | %s\n'					\
 	"!echo 'antispoof quick log for ${iface}'"	\
-	"pfctl -a ${iface} -f -"			\
+	"pfctl -a ${iface}/antispoof -f -"			\
 	>>	"/etc/${iface_cfg}"
 
 # default gateway

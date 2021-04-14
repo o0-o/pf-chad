@@ -3,4 +3,4 @@
 antispoof	quick	log	for	lo
 set	skip	on	lo
 
-# vim: ts=8:sw=8:sts=8:noet
+# vim: ts=8:sw=8:sts=8:noet:ft=pf

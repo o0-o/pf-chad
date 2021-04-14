@@ -116,18 +116,18 @@ done
 printf	'%s %s | %s\n'						\
 	"!echo 'pass in quick on ${iface} inet proto udp"	\
 	"from port bootps to ${iface} port bootpc'"		\
-	"pfctl -a ${iface} -f -"				\
+	"pfctl -a ${iface}/dhcp -f -"				\
 	>>	"/etc/${iface_cfg}"
 # antispoof rule
 printf	'%s | %s\n'					\
 	"!echo 'antispoof quick log for ${iface}'"	\
-	"pfctl -a ${iface} -f -"			\
+	"pfctl -a ${iface}/antispoof -f -"		\
 	>>	"/etc/${iface_cfg}"
 # ping
 printf	'%s %s | %s\n'							\
 	"!echo 'pass in on ${iface} inet proto icmp to ${iface}"	\
 	"icmp-type echoreq keep state'"					\
-	"pfctl -a ${iface} -f -"					\
+	"pfctl -a ${iface}/ping -f -"					\
 	>>	"/etc/${iface_cfg}"
 
 # pf tables

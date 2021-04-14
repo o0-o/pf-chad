@@ -7,4 +7,4 @@
 #set	limit	table-entries	200000
 #set	limit	pktdelay-pkts	10000
 
-# vim: ts=8:sw=8:sts=8:noet
+# vim: ts=8:sw=8:sts=8:noet:ft=pf

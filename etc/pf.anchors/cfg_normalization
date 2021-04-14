@@ -11,4 +11,4 @@ match	in	inet6	all				\
 	scrub	(	reassemble tcp	\
 			max-mss 1440		)
 
-# vim: ts=8:sw=8:sts=8:noet
+# vim: ts=8:sw=8:sts=8:noet:ft=pf

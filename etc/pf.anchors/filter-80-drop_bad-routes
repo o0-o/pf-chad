@@ -4,4 +4,4 @@ block	log	from	urpf-failed
 block	log	from	no-route
 block	log	to	no-route
 
-# vim: ts=8:sw=8:sts=8:noet
+# vim: ts=8:sw=8:sts=8:noet:ft=pf
