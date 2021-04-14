@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 # Usage:
 # cfg_iface	--vlan --subnet 99 --name sales --iface em0 --site 23 \
-#		--groups lan --description 'Sales Dept' \
+#		--mtu 9000 --groups lan --description 'Sales Dept' \
 #		--tables sales,dns-c,ntp-c,wan-c
 
 set -euo pipefail
@@ -28,6 +28,10 @@ while [ ! -z ${1-} ]; do
 			;;
 		--site)
 			typeset site=$2
+			shift 2
+			;;
+		--mtu)
+			typeset mtu=$2
 			shift 2
 			;;
 		--groups)
@@ -91,9 +95,13 @@ printf	'%s\n'				\
 	'lladdr random'			\
 	"inet ${ipv4}/24"		\
 	>>	"/etc/${iface_cfg}"
+[ -z "${mtu-}" ]			||
+printf	'mtu %s\n'			\
+	"${mtu}"			\
+	>>	"/etc/${iface_cfg}"
 [ -z "${description-}" ]		||
-printf	'%s\n'				\
-	"description '${description}'"	\
+printf	'description "%s"\n'		\
+	"${description}"		\
 	>>	"/etc/${iface_cfg}"
 
 # groups
