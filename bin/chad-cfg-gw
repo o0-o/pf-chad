@@ -159,6 +159,11 @@ rcctl	enable	nsd
 rcctl	start	nsd
 
 # enable but do not configure yet
+printf	'%s\n'				\
+	'authoritative;'		\
+	'default-lease-time 1800;'	\
+	'max-lease-time 3600;'		\
+	>	'/etc/dhcpd.conf'
 rcctl	enable dhcpd
 
 # enable packet forwarding

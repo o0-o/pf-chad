@@ -83,8 +83,6 @@ printf	'%s\n'				\
 # time
 ln	-sf	'/usr/share/zoneinfo/US/Eastern'	\
 		'/etc/localtime'
-rcctl	enable	ntpd
-rcctl	restart	ntpd
 
 # antivirus
 pkg_add clamav
