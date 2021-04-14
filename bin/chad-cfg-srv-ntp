@@ -18,14 +18,33 @@ while [ ! -z ${1-} ]; do
 	esac
 done
 
+# bind ntpd to the interface and enable/start it
 typeset	ipv4=$(	awk	'/^inet / { print $2 }'		\
 			"/etc/hostname.${iface}"	|
 		cut	-d	'/'	-f	1		)
-echo	"listen on ${ipv4}"	>>	'/etc/ntpd.conf'
+printf	'\n%s\n'			\
+	"listen on ${ipv4}"		\
+	>>	'/etc/ntpd.conf'
+rcctl	enable	ntpd
 rcctl	restart	ntpd
 
+# configure the interface as an ntpd server in pf
 echo	"!pfctl -t ntp-s -T add ${iface}"	\
 	>>	"/etc/hostname.${iface}"
 sh	'/etc/netstart'	$iface
+
+# configure dhcpd to advertise the service
+typeset	ts=$(date +%Y%m%d%H%M%S)
+cp	-a	'/etc/dhcpd.conf'		\
+		"/etc/.dhcpd.conf.${ts}"
+sed	-e	'/^shared-network/ { i\
+option ntp-servers '"${ipv4}"'\;
+			:loop
+			n
+			b loop
+		}'				\
+	"/etc/.dhcpd.conf.${ts}"		\
+	>	'/etc/dhcpd.conf'
+rcctl	restart	dhcpd
 
 # vim: ts=8:sw=8:sts=8:noet:ft=zsh
