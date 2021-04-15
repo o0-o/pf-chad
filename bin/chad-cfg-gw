@@ -68,9 +68,9 @@ printf	'%s\n'					\
 	"description '${description-WAN}'"	\
 	>>	"/etc/${iface_cfg}"
 # antispoof rule
-printf	'%s | %s\n'					\
-	"!echo 'antispoof quick log for ${iface}'"	\
-	"pfctl -a ${iface}/antispoof -f -"			\
+printf	'%s | %s\n'						\
+	"!echo 'antispoof quick log for ${iface}'"		\
+	"pfctl -a filter-00-local/${iface}-antispoof -f -"	\
 	>>	"/etc/${iface_cfg}"
 
 # default gateway
@@ -114,6 +114,7 @@ cp	-a	'/var/unbound/etc/unbound.conf'	\
 sed	-e	's/#tls-cert-bundle/tls-cert-bundle/'	\
 	-e	'/hide-identity/ i\
 	do-not-query-localhost: no\
+	local-zone: "10.in-addr.arpa" nodefault\
 \
 '	'/etc/examples/unbound.conf'			\
 	>	'/var/unbound/etc/unbound.conf'

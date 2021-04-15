@@ -53,7 +53,7 @@ while [ ! -z ${1-} ]; do
 	esac
 done
 
-# discover environment
+# define environment
 : ${vlan:=false}
 typeset	iface_cfg="hostname.${iface}"
 : ${site:=$(	ifconfig					|
@@ -61,6 +61,11 @@ typeset	iface_cfg="hostname.${iface}"
 		awk '{print $2}'				|
 		cut -d '.' -f 2						)}
 typeset	ipv4="10.${site}.${subnet}.$(( $RANDOM%199 +1 ))"
+typeset	ipv4_net=${ipv4%.*}
+typeset	ipv4_net_ptr=$(	echo	$ipv4					|
+			awk	-F	'.'				\
+			'{ print "$3"."$2"."$1".in-addr.arpa" }'	      )
+typeset	hostname=$(	hostname -s	)
 typeset	domain=$(	hostname				|
 			rev					|
 			cut -d '.' -f -2			|
@@ -116,18 +121,18 @@ done
 printf	'%s %s | %s\n'						\
 	"!echo 'pass in quick on ${iface} inet proto udp"	\
 	"from port bootps to ${iface} port bootpc'"		\
-	"pfctl -a ${iface}/dhcp -f -"				\
+	"pfctl -a ${iface} -f -"				\
 	>>	"/etc/${iface_cfg}"
 # antispoof rule
 printf	'%s | %s\n'					\
 	"!echo 'antispoof quick log for ${iface}'"	\
-	"pfctl -a ${iface}/antispoof -f -"		\
+	"pfctl -a ${iface} -f -"			\
 	>>	"/etc/${iface_cfg}"
 # ping
 printf	'%s %s | %s\n'							\
 	"!echo 'pass in on ${iface} inet proto icmp to ${iface}"	\
 	"icmp-type echoreq keep state'"					\
-	"pfctl -a ${iface}/ping -f -"					\
+	"pfctl -a ${iface} -f -"					\
 	>>	"/etc/${iface_cfg}"
 
 # pf tables
@@ -139,22 +144,22 @@ sh '/etc/netstart' "${iface}"
 printf	'%s\n'	"network for ${iface} configured successfully."	>&2
 
 # dhcpd
-printf	'shared-network %s {\n'						\
-	"${name}"							\
+printf	'shared-network %s {\n'				\
+	"${name}"					\
 	>>	'/etc/dhcpd.conf'
-printf	'\toption %s %s;\n'						\
-	'domain-name'		"\"${fqdn}\""				\
+printf	'\toption %s %s;\n'				\
+	'domain-name'		"\"${fqdn}\""		\
 	>>	'/etc/dhcpd.conf'
-printf	'\tsubnet 10.%s.%s.0 netmask 255.255.255.0 {\n'			\
-	"${site}"	"${subnet}"					\
+printf	'\tsubnet 10.%s.%s.0 netmask 255.255.255.0 {\n'	\
+	"${site}"	"${subnet}"			\
 	>>	'/etc/dhcpd.conf'
-printf	'\t\toption %s %s;\n'						\
-	'routers'	"${ipv4}"					\
+printf	'\t\toption %s %s;\n'				\
+	'routers'	"${ipv4}"			\
 	>>	'/etc/dhcpd.conf'
-printf	'\t\trange %s %s;\n'						\
-	"10.${site}.${subnet}.200"	"10.${site}.${subnet}.254"	\
+printf	'\t\trange %s %s;\n'				\
+	"${ipv4_net}.200"	"${ipv4_net}.254"	\
 	>>	'/etc/dhcpd.conf'
-printf	'\n\t}\n}\n'							\
+printf	'\n\t}\n}\n'					\
 	>>	'/etc/dhcpd.conf'
 # enable dhcpd for the new interface
 typeset	ts="$(date +%Y%m%d%H%M%S)"
@@ -162,22 +167,43 @@ cp	-a	'/etc/rc.conf.local'		\
 		"/etc/.rc.conf.local.${ts}"
 rcctl	enable	dhcpd
 sed	-e	'/dhcpd_flags/ { s/$/ '"${iface}"'/; }'	\
-	"/etc/.rc.conf.local.${ts}"				\
+	"/etc/.rc.conf.local.${ts}"			\
 	>	'/etc/rc.conf.local'
 rcctl	restart dhcpd
 printf	'%s\n'	"dhcp for ${iface} configured successfully."	>&2
 
 # nsd
 printf	'zone:\n\tname: "%s"\n\tzonefile: "master/%s"\n\n'	\
-	"${fqdn}"	"${fqdn}"				\
+	"${fqdn}"		"${fqdn}"			\
+	"${ipv4_ptr_net}"	"${ipv4_ptr_net}"		\
 	>>	'/var/nsd/etc/nsd.conf'
 nsd-checkconf	'/var/nsd/etc/nsd.conf'
 # zone file
 printf	'$ORIGIN\t\t\t%s.\n$TTL\t4h\n\n'	\
 	"${fqdn}"				\
 	>	"/var/nsd/zones/master/${fqdn}"
-printf	'@\tIN\tSOA\t%s. hostmaster.%s. (\n'		\
-	"${fqdn}"	"${domain}"			\
+printf	'@\tIN\tSOA\tns-001 adm (\n'		\
+	>>	"/var/nsd/zones/master/${fqdn}"
+printf	'\t\t%s\t; %s\n'			\
+	"$(date +%y%m%d%H%M)"	'serial'	\
+	'1h'			'refresh'	\
+	'30m'			'retry'		\
+	'7d'			'expire'	\
+	>>	"/var/nsd/zones/master/${fqdn}"
+printf	'\t\t%s )\t; %s\n\n'			\
+	'1h'	'negative'			\
+	>>	"/var/nsd/zones/master/${fqdn}"
+# name servers
+printf	'\tIN\tNS\tns-001\n'			\
+	>>	"/var/nsd/zones/master/${fqdn}"
+# records
+printf	'%s\tIN\t%s\t%s\n'			\
+	"${hostname}"	'A'	"${ipv4}"	\
+	'ns-001'	'CNAME'	"${hostname}"	\
+	>>	"/var/nsd/zones/master/${fqdn}"
+# reverse zone file
+printf	'$TTL\t4h\n\n@\tIN\tSOA\tns-001.%s. adm.%s. (\n'	\
+	"${fqdn}"	"${fqdn}"				\
 	>>	"/var/nsd/zones/master/${fqdn}"
 printf	'\t\t%s\t; %s\n'				\
 	"$(date +%y%m%d%H%M)"	'serial'		\
@@ -185,16 +211,16 @@ printf	'\t\t%s\t; %s\n'				\
 	'30m'			'retry'			\
 	'7d'			'expire'		\
 	>>	"/var/nsd/zones/master/${fqdn}"
-printf	'\t\t%s )\t; %s\n\n'				\
-	'1h'	'negative'				\
+printf	'\t\t%s )\t; %s\n\n'			\
+	'1h'	'negative'			\
 	>>	"/var/nsd/zones/master/${fqdn}"
 # name servers
-printf	'@\tIN\tNS\t%s.\n'				\
-	"$(hostname -s).${fqdn}"			\
+printf	'\tIN\tNS\tns-001.%s.\n'		\
+	"ns-001.${fqdn}"			\
 	>>	"/var/nsd/zones/master/${fqdn}"
 # records
-printf	'%s\tIN\t%s\t%s\n'				\
-	"$(hostname -s)"	'A'	"${ipv4}"		\
+printf	'%s\tIN\t%s\t%s.\n'				\
+	"${ipv4##*.}"	'PTR'	"${hostname}.${fqdn}"	\
 	>>	"/var/nsd/zones/master/${fqdn}"
 nsd-checkzone	"${fqdn}"	"/var/nsd/zones/master/${fqdn}"
 rcctl	restart nsd
@@ -207,12 +233,13 @@ sed -e							\
 '/hide-version/ i\
 	private-domain: "'"${fqdn}"'"\
 	domain-insecure: "'"${fqdn}"'"\
-	access-control: '"10.${site}.${subnet}.0/24"' allow\
+	access-control: '"${ipv4_net}.0/24"' allow\
 \
 '	"/var/unbound/etc/.unbound.conf.${ts}"			\
 	>	'/var/unbound/etc/unbound.conf'
 printf	'\nstub-zone:\n\tname: "%s"\n\tstub-addr: %s\n\tstub-no-cache: yes\n' \
-	"${fqdn}"	'127.0.0.1@5678'				\
+	"${fqdn}"		'127.0.0.1@5678'			\
+	"${ipv4_net_ptr}"	'127.0.0.1@5678'			\
 	>>	'/var/unbound/etc/unbound.conf'
 unbound-checkconf
 rcctl	restart unbound
