@@ -85,7 +85,7 @@ typeset	ipv4="10.${site}.${subnet}.$(( $RANDOM % 199 +1 ))"
 typeset	ipv4_net=${ipv4%.*}
 typeset	ipv4_net_ptr=$(	echo	$ipv4					|
 			awk	-F	'.'				\
-			'{ print "$3"."$2"."$1".in-addr.arpa" }'	      )
+				'{ print $3"."$2"."$1".in-addr.arpa" }'      )
 typeset	hostname=$(	hostname -s	)
 typeset	domain=$(	hostname				|
 			rev					|
