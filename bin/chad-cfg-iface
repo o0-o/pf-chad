@@ -175,7 +175,7 @@ printf	'%s\n'	"dhcp for ${iface} configured successfully."	>&2
 # nsd
 printf	'zone:\n\tname: "%s"\n\tzonefile: "master/%s"\n\n'	\
 	"${fqdn}"		"${fqdn}"			\
-	"${ipv4_ptr_net}"	"${ipv4_ptr_net}"		\
+	"${ipv4_net_ptr}"	"${ipv4_net_ptr}"		\
 	>>	'/var/nsd/etc/nsd.conf'
 nsd-checkconf	'/var/nsd/etc/nsd.conf'
 # zone file
