@@ -60,7 +60,28 @@ typeset	iface_cfg="hostname.${iface}"
 		grep -m 1 'inet 10'				|
 		awk '{print $2}'				|
 		cut -d '.' -f 2						)}
-typeset	ipv4="10.${site}.${subnet}.$(( $RANDOM%199 +1 ))"
+# find available subnets
+typeset all_sns=$(	sn=1
+			while [ $sn -lt 255 ]; do
+				printf '%s\n' $sn
+				sn=$(( $sn + 1 ))
+			done				)
+typeset	used_sns=$(	ifconfig					|
+			awk '/^[[:space:]]*inet 10\./ {print $2}'	|
+			cut -d '.' -f 3					|
+			tr	'\n'	' '				      )
+typeset	avail_sns="$all_sns"
+for usn in $used_sns; do
+	avail_sns=$(	echo	"$avail_sns"		|
+			sed	-e	'/^'"$usn"'$/d'		)
+done
+typeset	num_avail_sn=$(	echo	"$avail_sns"	|
+			wc	-l			)
+# choose random subnet if not defined in flags
+: ${subnet:=$(( $RANDOM % $num_avail_sn ))}
+# assign random gateway ip
+typeset	ipv4="10.${site}.${subnet}.$(( $RANDOM % 199 +1 ))"
+# define network
 typeset	ipv4_net=${ipv4%.*}
 typeset	ipv4_net_ptr=$(	echo	$ipv4					|
 			awk	-F	'.'				\
