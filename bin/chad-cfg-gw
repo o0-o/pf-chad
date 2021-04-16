@@ -133,7 +133,7 @@ printf	'\t%s\n'						\
 ftp	-S	do					\
 	-o	'/var/unbound/db/root.hints'		\
 	'https://www.internic.net/domain/named.root'
-unbound-anchor	-a	"/var/unbound/db/root.key"
+! unbound-anchor	-a	"/var/unbound/db/root.key" # should exit 1
 unbound-checkconf
 rcctl	enable	unbound
 rcctl	start	unbound
