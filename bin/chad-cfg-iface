@@ -225,20 +225,20 @@ printf	'%s\tIN\t%s\t%s\n'			\
 # reverse zone file
 printf	'$TTL\t4h\n\n@\tIN\tSOA\tns-001.%s. adm.%s. (\n'	\
 	"${fqdn}"	"${fqdn}"				\
-	>>	"/var/nsd/zones/master/${fqdn}"
+	>>	"/var/nsd/zones/master/${ipv4_net_ptr}"
 printf	'\t\t%s\t; %s\n'				\
 	"$(date +%y%m%d%H%M)"	'serial'		\
 	'1h'			'refresh'		\
 	'30m'			'retry'			\
 	'7d'			'expire'		\
-	>>	"/var/nsd/zones/master/${fqdn}"
+	>>	"/var/nsd/zones/master/${ipv4_net_ptr}"
 printf	'\t\t%s )\t; %s\n\n'			\
 	'1h'	'negative'			\
-	>>	"/var/nsd/zones/master/${fqdn}"
+	>>	"/var/nsd/zones/master/${ipv4_net_ptr}"
 # name servers
 printf	'\tIN\tNS\tns-001.%s.\n'		\
 	"ns-001.${fqdn}"			\
-	>>	"/var/nsd/zones/master/${fqdn}"
+	>>	"/var/nsd/zones/master/${ipv4_net_ptr}"
 # records
 printf	'%s\tIN\t%s\t%s.\n'				\
 	"${ipv4##*.}"	'PTR'	"${hostname}.${fqdn}"	\
