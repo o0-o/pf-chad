@@ -242,8 +242,9 @@ printf	'\tIN\tNS\tns-001.%s.\n'		\
 # records
 printf	'%s\tIN\t%s\t%s.\n'				\
 	"${ipv4##*.}"	'PTR'	"${hostname}.${fqdn}"	\
-	>>	"/var/nsd/zones/master/${fqdn}"
+	>>	"/var/nsd/zones/master/${ipv4_net_ptr}"
 nsd-checkzone	"${fqdn}"	"/var/nsd/zones/master/${fqdn}"
+nsd-checkzone	"${fqdn}"	"/var/nsd/zones/master/${ipv4_net_ptr}"
 rcctl	restart nsd
 
 # unbound
