@@ -1,9 +1,0 @@
-# SUPER ADMIN
-
-table	<adm-sup>	persist
-pass	in	quick	log	from	<adm-sup>
-pass	out	quick	log	from	<adm-sup>
-block	out	quick	log	from	<adm-sup>	\
-				to	<adm-sup>
-
-# vim: ts=8:sw=8:sts=8:noet:ft=pf
