@@ -81,7 +81,7 @@ printf	'%s\n'				\
 	>>	'/etc/daily.local'
 
 # time
-ln	-sf	'/usr/share/zoneinfo/US/Eastern'	\
+ln	-sf	'/usr/share/zoneinfo/America/New_York'	\
 		'/etc/localtime'
 
 # antivirus
