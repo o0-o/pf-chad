@@ -69,35 +69,37 @@ printf	'%s\n'					\
 	>>	"/etc/${iface_cfg}"
 
 # pf
-typeset	anchor_iface="filter-50-${iface}"
+typeset	anchor_cfg="filter-50-${iface}"
+typeset	anchor="filter-50/${iface}"
 typeset	bogon_url='https://www.team-cymru.org/Services/Bogons/bogon-bn-agg.txt'
 # install pf config
 cp	-a	'/etc/pf.conf'		\
 		'/etc/.pf.conf.default'
 cp	-a	"${0%/*}/../etc"	\
 		'/'
-touch	"/etc/pf.anchors/${anchor_iface}"
-chmod	600	"/etc/pf.anchors/${anchor_iface}"
+touch	"/etc/pf.anchors/${anchor_cfg}"
+chmod	600	"/etc/pf.anchors/${anchor_cfg}"
 # antispoof
 printf	'%s\n'						\
 	''						\
 	"antispoof quick log for ${iface}"		\
-	>>	"/etc/pf.anchors/${anchor_iface}"
+	''						\
+	>>	"/etc/pf.anchors/${anchor_cfg}"
 # wan service
 printf	'%s\n'								\
 	''								\
-	'table <wan-c> persist'						\
-	'table <bogons> persist file "/etc/pf.tables/bogon-bn-agg.txt"'	\
+	'pfctl -t bogons -T replace -f "/etc/pf.tables/bogon-bn-agg.txt"'     \
+	"pfctl -t wan-c -T add ${iface}"				\
 	''								\
 	"block in quick log on ${iface} from <bogons>"			\
 	"block out quick log on ${iface} to <bogons>"			\
 	''								\
 	"pass out log on ${iface} proto { tcp udp icmp } \\"		\
 	"from <wan-c> to ! <bogons> nat-to ${iface} modulate state"	\
-	>>	"/etc/pf.anchors/${anchor_iface}"
+	>>	"/etc/pf.anchors/${anchor_cfg}"
 # load anchor
-printf	'%s\n'								\
-	"!pfctl -a ${anchor_iface} -f /etc/pf.anchors/${anchor_iface}"	\
+printf	'%s\n'							\
+	"!pfctl -a ${anchor} -f /etc/pf.anchors/${anchor_cfg}"	\
 	>>	"/etc/${iface_cfg}"
 # check for bogon changes monthly
 printf	'%s\n'								\
@@ -123,9 +125,8 @@ printf	'%s\n'				\
 	>	'/etc/resolv.conf'
 
 # bring up the network
-pfctl	-F	all
 sh	'/etc/netstart'
-ping	-c	4	9.9.9.9
+ping	-c	1	9.9.9.9
 
 # unbound
 cp	-a	'/var/unbound/etc/unbound.conf'	\
