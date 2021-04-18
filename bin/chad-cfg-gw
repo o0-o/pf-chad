@@ -124,6 +124,7 @@ printf	'%s\n'				\
 
 # bring up the network
 sh	'/etc/netstart'
+sh	'/etc/netstart'
 ping	-c	4	9.9.9.9
 
 # unbound
