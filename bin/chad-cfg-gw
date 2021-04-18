@@ -99,6 +99,7 @@ printf	'%s\n'								\
 printf	'%s\n'								\
 	"!pfctl -a ${anchor_iface} -f /etc/pf.anchors/${anchor_iface}"	\
 	>>	"/etc/${iface_cfg}"
+# check for bogon changes monthly
 printf	'%s\n'								\
 	"( cd /tmp; curl -LO ${bogon_url} ) 2> /dev/null"		\
 	'diff /tmp/bogon-bn-agg.txt /etc/pf.tables/bogon-bn-agg.txt'	\
