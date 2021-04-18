@@ -1,7 +1,7 @@
 # STATE
 
 set	state-defaults	max 1500	\
-			max-src-conn 32	\
+			max-src-conn 50 \
 			if-bound
 
 # vim: ts=8:sw=8:sts=8:noet:ft=pf
