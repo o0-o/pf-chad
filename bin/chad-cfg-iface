@@ -169,8 +169,8 @@ printf	'%s\n'							\
 	"icmp-type echoreq keep state"				\
 	>>	"/etc/pf.anchors/${anchor_iface}"
 # load anchor
-printf	'%s\n'
-	"!pfctl -a ${anchor_iface} -f /etc/pf.anchors/${anchor_iface}"      \
+printf	'%s\n'								\
+	"!pfctl -a ${anchor_iface} -f /etc/pf.anchors/${anchor_iface}"	\
 	>>	"/etc/${iface_cfg}"
 
 # pf tables

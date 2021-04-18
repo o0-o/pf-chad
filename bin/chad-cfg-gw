@@ -91,8 +91,8 @@ printf	'%s\n'								\
 	"from <wan-c> to ! <bogons> nat-to ${iface} modulate state"	\
 	>>	"/etc/pf.anchors/${anchor_iface}"
 # load anchor
-printf	'%s\n'
-	"!pfctl -a ${anchor_iface} -f /etc/pf.anchors/${anchor_iface}"      \
+printf	'%s\n'								\
+	"!pfctl -a ${anchor_iface} -f /etc/pf.anchors/${anchor_iface}"	\
 	>>	"/etc/${iface_cfg}"
 printf	'%s\n'								\
 	"( cd /tmp; curl -LO ${bogon_url} ) 2> /dev/null"		\
