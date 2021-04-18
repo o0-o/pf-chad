@@ -71,13 +71,13 @@ printf	'%s\n'					\
 # pf
 typeset	anchor_iface="filter-50-${iface}"
 typeset	bogon_url='https://www.team-cymru.org/Services/Bogons/bogon-bn-agg.txt'
-touch	"/etc/pf.anchors/${anchor_iface}"
-chmod	600	"/etc/pf.anchors/${anchor_iface}"
 # install pf config
 cp	-a	'/etc/pf.conf'		\
 		'/etc/.pf.conf.default'
 cp	-a	"${0%/*}/../etc"	\
 		'/'
+touch	"/etc/pf.anchors/${anchor_iface}"
+chmod	600	"/etc/pf.anchors/${anchor_iface}"
 # antispoof
 printf	'%s\n'						\
 	''						\
@@ -123,7 +123,7 @@ printf	'%s\n'				\
 	>	'/etc/resolv.conf'
 
 # bring up the network
-sh	'/etc/netstart'
+pfctl	-F	all
 sh	'/etc/netstart'
 ping	-c	4	9.9.9.9
 
