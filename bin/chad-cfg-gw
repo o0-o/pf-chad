@@ -67,18 +67,44 @@ printf	'%s\n'					\
 printf	'%s\n'					\
 	"description '${description-WAN}'"	\
 	>>	"/etc/${iface_cfg}"
-# antispoof rule
-printf	'%s | %s\n'						\
-	"!echo 'antispoof quick log for ${iface}'"		\
-	"pfctl -a filter-00-local/${iface}-antispoof -f -"	\
-	>>	"/etc/${iface_cfg}"
+
+# pf
+typeset	anchor_iface="filter-50-${iface}"
+typeset	bogon_url='https://www.team-cymru.org/Services/Bogons/bogon-bn-agg.txt'
+install	-m	0700					\
+	-d	"/etc/pf.anchors/${anchor_iface}"
+# antispoof
+printf	'%s\n'						\
+	''						\
+	"antispoof quick log for ${iface}"		\
+	>>	"/etc/pf.anchors/${anchor_iface}"
+# wan service
+printf	'%s\n'								\
+	''								\
+	'table <wan-c> persist'						\
+	'table <bogons> persist file "/etc/pf.tables/bogon-bn-agg.txt"'	\
+	''								\
+	"block in quick log on ${iface} from <bogons>"			\
+	"block out quick log on ${iface} to <bogons>"			\
+	''								\
+	"pass out log on ${iface} proto { tcp udp icmp } \\"		\
+	"from <wan-c> to ! <bogons> nat-to ${iface} modulate state"	\
+	>>	"/etc/pf.anchors/${anchor_iface}"
+# load anchor
+printf	'%s\n'
+	"!pfctl -a ${anchor_iface} -f /etc/pf.anchors/${anchor_iface}"      \
+	>>	"/etc/${iface_cfg_iface}"
+printf	'%s\n'								\
+	"( cd /tmp; curl -LO ${bogon_url} ) 2> /dev/null"		\
+	'diff /tmp/bogon-bn-agg.txt /etc/pf.tables/bogon-bn-agg.txt'	\
+	>>	'/etc/monthly.local'
 
 # default gateway
 printf	'%s\n'			\
 	"${next_hop}"		\
 	>	'/etc/mygate'
 
-# temporarily use quadnine
+# use quadnine until a local server is available
 printf	'%s\n'				\
 	'nameserver 9.9.9.9'		\
 	'lookup file bind'		\

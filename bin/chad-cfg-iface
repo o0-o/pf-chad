@@ -131,30 +131,47 @@ printf	'description "%s"\n'		\
 	>>	"/etc/${iface_cfg}"
 
 # groups
-echo	"group ${name}"			\
-	>>	"/etc/${iface_cfg}"
 for g in ${groups-}; do
 	echo	"group ${g}"			\
 		>>	"/etc/${iface_cfg}"
 done
 
+#pf
+typeset	anchor_iface="filter-60-${iface}"
+typeset	adm_table="adm-${name%%-}"
+install	-m	0700					\
+	-d	"/etc/pf.anchors/${anchor_iface}"
 # allow dhcp
-printf	'%s %s | %s\n'						\
-	"!echo 'pass in quick on ${iface} inet proto udp"	\
-	"from port bootps to ${iface} port bootpc'"		\
-	"pfctl -a ${iface} -f -"				\
-	>>	"/etc/${iface_cfg}"
-# antispoof rule
-printf	'%s | %s\n'					\
-	"!echo 'antispoof quick log for ${iface}'"	\
-	"pfctl -a ${iface} -f -"			\
-	>>	"/etc/${iface_cfg}"
-# ping
-printf	'%s %s | %s\n'							\
-	"!echo 'pass in on ${iface} inet proto icmp to ${iface}"	\
-	"icmp-type echoreq keep state'"					\
-	"pfctl -a ${iface} -f -"					\
-	>>	"/etc/${iface_cfg}"
+printf	'%s\n'						\
+	"pass in quick on ${iface} inet proto udp \\"	\
+	"from port bootps to ${iface} port bootpc"	\
+	>>	"/etc/pf.anchors/${anchor_iface}"
+# antispoof
+printf	'%s\n'								\
+	''								\
+	"antispoof quick log for ${iface}"				\
+	"block in quick log on ${iface} from ! ${iface}:network"
+	>>	"/etc/pf.anchors/${anchor_iface}"
+# adm
+printf	'%s\n'								\
+	''								\
+	"table <${adm_table}> persist"					\
+	"pass log on ${iface} from <${adm_table}> to ${iface}:network"	\
+	>>	"/etc/pf.anchors/${anchor_iface}"
+# allow ping to and from gateway
+printf	'%s\n'							\
+	''							\
+	"pass in on ${iface} inet proto icmp to ${iface} \\"	\
+	"icmp-type echoreq keep state"				\
+	''							\
+	"pass out on ${iface} inet proto icmp \\"		\
+	"from ${iface} to ${iface}:network \\"			\
+	"icmp-type echoreq keep state"				\
+	>>	"/etc/pf.anchors/${anchor_iface}"
+# load anchor
+printf	'%s\n'
+	"!pfctl -a ${anchor_iface} -f /etc/pf.anchors/${anchor_iface}"      \
+	>>	"/etc/${iface_cfg_iface}"
 
 # pf tables
 for t in ${tables-}; do
