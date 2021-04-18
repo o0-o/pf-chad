@@ -73,6 +73,11 @@ typeset	anchor_iface="filter-50-${iface}"
 typeset	bogon_url='https://www.team-cymru.org/Services/Bogons/bogon-bn-agg.txt'
 touch	"/etc/pf.anchors/${anchor_iface}"
 chmod	600	"/etc/pf.anchors/${anchor_iface}"
+# install pf config
+cp	-a	'/etc/pf.conf'		\
+		'/etc/.pf.conf.default'
+cp	-a	"${0%/*}/../etc"	\
+		'/'
 # antispoof
 printf	'%s\n'						\
 	''						\
@@ -98,6 +103,12 @@ printf	'%s\n'								\
 	"( cd /tmp; curl -LO ${bogon_url} ) 2> /dev/null"		\
 	'diff /tmp/bogon-bn-agg.txt /etc/pf.tables/bogon-bn-agg.txt'	\
 	>>	'/etc/monthly.local'
+# allow this host to access the internet
+printf	'%s\n'					\
+	"!pfctl -t wan-c -T add ${iface}"	\
+	>>	"/etc/${iface_cfg}"
+pfctl	-nf	'/etc/pf.conf'	&&
+pfctl	-f	'/etc/pf.conf'
 
 # default gateway
 printf	'%s\n'			\
@@ -113,26 +124,6 @@ printf	'%s\n'				\
 # bring up the network
 sh	'/etc/netstart'
 ping	-c	1	9.9.9.9
-
-# install most updated pf-chad rules
-which	git	||
-pkg_add	git
-[ ! -e '/tmp/pf-chad' ]		||
-rm	-rf	'/tmp/pf-chad'
-git	clone	--depth 1			\
-	'https://github.com/o0-o/pf-chad.git'	\
-	'/tmp/pf-chad'
-cp	-a	'/etc/pf.conf'		\
-		'/etc/.pf.conf.default'
-cp	-a	'/tmp/pf-chad/etc'	\
-		'/'
-rm -rf '/tmp/pf-chad'
-# allow this host to access the internet
-printf	'%s\n'					\
-	"!pfctl -t wan-c -T add ${iface}"	\
-	>>	"/etc/${iface_cfg}"
-pfctl	-nf	'/etc/pf.conf'	&&
-pfctl	-f	'/etc/pf.conf'
 
 # unbound
 cp	-a	'/var/unbound/etc/unbound.conf'	\
