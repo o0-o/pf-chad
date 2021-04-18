@@ -1,6 +1,5 @@
 # SUPER ADMIN
 
-table	<adm>	persist
 pass	in	quick	log	from	<adm>
 pass	out	quick	log	from	<adm>
 block	out	quick	log	from	<adm>	\
