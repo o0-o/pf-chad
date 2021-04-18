@@ -88,8 +88,10 @@ printf	'%s\n'						\
 # wan service
 printf	'%s\n'								\
 	''								\
-	'pfctl -t bogons -T replace -f "/etc/pf.tables/bogon-bn-agg.txt"'     \
-	"pfctl -t wan-c -T add ${iface}"				\
+	'!pfctl -t bogons -T replace -f "/etc/pf.tables/bogon-bn-agg.txt"'    \
+	"!pfctl -t wan-c -T add ${iface}"				\
+	>>	"/etc/${iface_cfg}"
+printf	'%s\n'								\
 	''								\
 	"block in quick log on ${iface} from <bogons>"			\
 	"block out quick log on ${iface} to <bogons>"			\
