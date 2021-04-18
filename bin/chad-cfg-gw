@@ -71,8 +71,8 @@ printf	'%s\n'					\
 # pf
 typeset	anchor_iface="filter-50-${iface}"
 typeset	bogon_url='https://www.team-cymru.org/Services/Bogons/bogon-bn-agg.txt'
-install	-m	0700					\
-	-d	"/etc/pf.anchors/${anchor_iface}"
+touch	"/etc/pf.anchors/${anchor_iface}"
+chmod	600	"/etc/pf.anchors/${anchor_iface}"
 # antispoof
 printf	'%s\n'						\
 	''						\

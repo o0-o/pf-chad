@@ -139,8 +139,8 @@ done
 #pf
 typeset	anchor_iface="filter-60-${iface}"
 typeset	adm_table="adm-${name%%-}"
-install	-m	0700					\
-	-d	"/etc/pf.anchors/${anchor_iface}"
+touch	"/etc/pf.anchors/${anchor_iface}"
+chmod	600	"/etc/pf.anchors/${anchor_iface}"
 # allow dhcp
 printf	'%s\n'						\
 	"pass in quick on ${iface} inet proto udp \\"	\
