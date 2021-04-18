@@ -171,7 +171,7 @@ printf	'%s\n'							\
 # load anchor
 printf	'%s\n'
 	"!pfctl -a ${anchor_iface} -f /etc/pf.anchors/${anchor_iface}"      \
-	>>	"/etc/${iface_cfg_iface}"
+	>>	"/etc/${iface_cfg}"
 
 # pf tables
 for t in ${tables-}; do
