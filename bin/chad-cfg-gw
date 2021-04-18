@@ -124,7 +124,7 @@ printf	'%s\n'				\
 
 # bring up the network
 sh	'/etc/netstart'
-ping	-c	1	9.9.9.9
+ping	-c	4	9.9.9.9
 
 # unbound
 cp	-a	'/var/unbound/etc/unbound.conf'	\
