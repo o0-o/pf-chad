@@ -127,8 +127,17 @@ printf	'%s\n'				\
 	>	'/etc/resolv.conf'
 
 # bring up the network
+# requires multiple attempts (not sure why)
 sh	'/etc/netstart'
-ping	-c	1	9.9.9.9
+while	! {	ping	-w	1	\
+			-c	1	\
+			$next_hop	||
+		ping	-w	1	\
+			-c	1	\
+			9.9.9.9;		}; do
+	sleep	1
+	sh	'/etc/netstart'
+done
 
 # unbound
 cp	-a	'/var/unbound/etc/unbound.conf'	\
