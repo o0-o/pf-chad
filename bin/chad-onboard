@@ -66,6 +66,7 @@ set -x
 
 # hardening
 rcctl	enable	accounting
+rcctl	disable	slaacd
 sysctl	-w	vm.malloc_conf=CFGU
 sysctl	-w	ddb.panic=0
 printf	'%s\n'				\
