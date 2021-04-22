@@ -1,13 +1,16 @@
 #!/usr/bin/env sh
-# Usage:
-# cfg_iface	--vlan --subnet 99 --name sales --iface em0 --site 23 \
-#		--mtu 9000 --groups lan --description 'Sales Dept' \
-#		--tables sales,dns-c,ntp-c,wan-c
+#
+# Usage: cfg_iface	--vlan --subnet 99 --name sales --iface em0 \
+#			--site 23 --mtu 9000 --groups lan \
+#			--dhcp-start 100 --description 'Sales Dept' \
+#			--tables sales,dns-c,ntp-c,wan- \
+#
+########################################################################
 
 set -euo pipefail
 set -x
 
-# parse aguments
+### PARSE AGUMENTS #####################################################
 while [ ! -z ${1-} ]; do
 	case "$1" in
 		--vlan)
@@ -38,6 +41,10 @@ while [ ! -z ${1-} ]; do
 			typeset groups=$(echo $2 | sed -e 's/,/ /g')
 			shift 2
 			;;
+		--dhcp-start)
+			typeset	dhcp_start=$2
+			shift 2
+			;;
 		--description)
 			typeset description=$2
 			shift 2
@@ -53,7 +60,7 @@ while [ ! -z ${1-} ]; do
 	esac
 done
 
-# define environment
+### SETUP ENVIRONMENT ##################################################
 : ${vlan:=false}
 typeset	iface_cfg="hostname.${iface}"
 : ${site:=$(	ifconfig					|
@@ -79,8 +86,9 @@ typeset	num_avail_sn=$(	echo	"$avail_sns"	|
 			wc	-l			)
 # choose random subnet if not defined in flags
 : ${subnet:=$(( $RANDOM % $num_avail_sn ))}
+: ${dhcp_start:=200}
 # assign random gateway ip
-typeset	ipv4="10.${site}.${subnet}.$(( $RANDOM % 199 +1 ))"
+typeset	ipv4="10.${site}.${subnet}.$(( $RANDOM % $dhcp_start +1 ))"
 # define network
 typeset	ipv4_net=${ipv4%.*}
 typeset	ipv4_net_ptr=$(	echo	$ipv4					|
@@ -93,19 +101,20 @@ typeset	domain=$(	hostname				|
 			rev						)
 typeset fqdn="${name}.${domain}"
 
-# set interface to up
+### SET INTERFACE TO UP ################################################
 typeset	iface_cfg="hostname.${iface}"
 [ -e "/etc/${iface_cfg}" ]			||
 echo	'up'	>	"/etc/${iface_cfg}"
-grep	-q "^up$"	"/etc/${iface_cfg}"	||
+grep	-q	"^up$"	"/etc/${iface_cfg}"	||
 {	cp	-a	"/etc/${iface_cfg}"	\
 			"/tmp/${iface_cfg}"
 	sed	-e	'1i\
 up\
 '	>	"/etc/${iface_cfg}"
 }
-sh '/etc/netstart' "${iface}"
-# if vlan, switch to vlan conf file
+sh	'/etc/netstart'	"${iface}"
+
+### IF VLAN, SWITCH TO VLAN CONF FILE ##################################
 ! $vlan	||
 {	typeset	iface_cfg="hostname.vlan${subnet}"
 	# interface
@@ -116,7 +125,8 @@ sh '/etc/netstart' "${iface}"
 	typeset	parent_iface="${iface}"
 	typeset	iface="vlan${subnet}"
 }
-# finish configuring interface
+
+### FINISH CONFIGURING INTERFACE #######################################
 printf	'%s\n'				\
 	'lladdr random'			\
 	"inet ${ipv4}/24"		\
@@ -129,35 +139,35 @@ printf	'mtu %s\n'			\
 printf	'description "%s"\n'		\
 	"${description}"		\
 	>>	"/etc/${iface_cfg}"
-
 # groups
 for g in ${groups-}; do
 	echo	"group ${g}"			\
 		>>	"/etc/${iface_cfg}"
 done
 
-#pf
-typeset	anchor_iface="filter-60-${iface}"
+### PACKET FILTER ######################################################
+typeset	iface_anchor="filter/60-${iface}"
+typeset	iface_anchor_cfg="filter-60-${iface}"
 typeset	adm_table="adm-${name%%-}"
-touch	"/etc/pf.anchors/${anchor_iface}"
-chmod	600	"/etc/pf.anchors/${anchor_iface}"
+touch	"/etc/pf.anchors/${iface_anchor}"
+chmod	600	"/etc/pf.anchors/${iface_anchor_cfg}"
 # allow dhcp
 printf	'%s\n'						\
 	"pass in quick on ${iface} inet proto udp \\"	\
 	"from port bootps to ${iface} port bootpc"	\
-	>>	"/etc/pf.anchors/${anchor_iface}"
+	>>	"/etc/pf.anchors/${iface_anchor_cfg}"
 # antispoof
 printf	'%s\n'								\
 	''								\
 	"antispoof quick log for ${iface}"				\
 	"block in quick log on ${iface} from ! ${iface}:network"
-	>>	"/etc/pf.anchors/${anchor_iface}"
+	>>	"/etc/pf.anchors/${iface_anchor_cfg}"
 # adm
 printf	'%s\n'								\
 	''								\
 	"table <${adm_table}> persist"					\
 	"pass log on ${iface} from <${adm_table}> to ${iface}:network"	\
-	>>	"/etc/pf.anchors/${anchor_iface}"
+	>>	"/etc/pf.anchors/${iface_anchor_cfg}"
 # allow ping to and from gateway
 printf	'%s\n'							\
 	''							\
@@ -167,12 +177,11 @@ printf	'%s\n'							\
 	"pass out on ${iface} inet proto icmp \\"		\
 	"from ${iface} to ${iface}:network \\"			\
 	"icmp-type echoreq keep state"				\
-	>>	"/etc/pf.anchors/${anchor_iface}"
+	>>	"/etc/pf.anchors/${iface_anchor_cfg}"
 # load anchor
 printf	'%s\n'								\
-	"!pfctl -a ${anchor_iface} -f /etc/pf.anchors/${anchor_iface}"	\
+	"!pfctl -a ${iface_anchor} -f /etc/pf.anchors/${iface_anchor}"	\
 	>>	"/etc/${iface_cfg}"
-
 # pf tables
 for t in ${tables-}; do
 	echo	"!pfctl -t ${t} -T add ${iface}:network"	\
@@ -181,7 +190,7 @@ done
 sh '/etc/netstart' "${iface}"
 printf	'%s\n'	"network for ${iface} configured successfully."	>&2
 
-# dhcpd
+### DHCPD ##############################################################
 printf	'shared-network %s {\n'				\
 	"${name}"					\
 	>>	'/etc/dhcpd.conf'
@@ -210,7 +219,7 @@ sed	-e	'/dhcpd_flags/ { s/$/ '"${iface}"'/; }'	\
 rcctl	restart dhcpd
 printf	'%s\n'	"dhcp for ${iface} configured successfully."	>&2
 
-# nsd
+### ADD ZONE TO NSD ####################################################
 printf	'zone:\n\tname: "%s"\n\tzonefile: "master/%s"\n\n'	\
 	"${fqdn}"		"${fqdn}"			\
 	"${ipv4_net_ptr}"	"${ipv4_net_ptr}"		\
@@ -249,12 +258,12 @@ printf	'\t\t%s\t; %s\n'				\
 	'30m'			'retry'			\
 	'7d'			'expire'		\
 	>>	"/var/nsd/zones/master/${ipv4_net_ptr}"
-printf	'\t\t%s )\t; %s\n\n'			\
-	'1h'	'negative'			\
+printf	'\t\t%s )\t; %s\n\n'				\
+	'1h'	'negative'				\
 	>>	"/var/nsd/zones/master/${ipv4_net_ptr}"
 # name servers
-printf	'\tIN\tNS\tns-001.%s.\n'		\
-	"ns-001.${fqdn}"			\
+printf	'\tIN\tNS\tns-001.%s.\n'			\
+	"ns-001.${fqdn}"				\
 	>>	"/var/nsd/zones/master/${ipv4_net_ptr}"
 # records
 printf	'%s\tIN\t%s\t%s.\n'				\
@@ -262,9 +271,10 @@ printf	'%s\tIN\t%s\t%s.\n'				\
 	>>	"/var/nsd/zones/master/${ipv4_net_ptr}"
 nsd-checkzone	"${fqdn}"	"/var/nsd/zones/master/${fqdn}"
 nsd-checkzone	"${fqdn}"	"/var/nsd/zones/master/${ipv4_net_ptr}"
+rcctl	enable	nsd
 rcctl	restart nsd
 
-# unbound
+### ALLOW CLIENTS TO QUERY THROUGH UNBOUND #############################
 typeset	ts="$(date +%Y%m%d%H%M%S)"
 cp	-a	'/var/unbound/etc/unbound.conf'		\
 		"/var/unbound/etc/.unbound.conf.${ts}"
@@ -281,6 +291,7 @@ printf	'\nstub-zone:\n\tname: "%s"\n\tstub-addr: %s\n\tstub-no-cache: yes\n' \
 	"${ipv4_net_ptr}"	'127.0.0.1@5678'			\
 	>>	'/var/unbound/etc/unbound.conf'
 unbound-checkconf
+rcctl	enable	unbound
 rcctl	restart unbound
 printf	'%s\n'	"dns for ${iface} configured successfully."	>&2
 
