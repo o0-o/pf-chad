@@ -1,10 +1,15 @@
 #!/usr/bin/env sh
-# Usage:
+#
+# Usage: chad-cfg-srv-dns --iface vlan123
+#
+########################################################################
+
 
 set -euo pipefail
 set -x
+typeset	ts=$(date +%Y%m%d%H%M%S)
 
-# parse aguments
+### PARSE ARGUMENTS ####################################################
 while [ ! -z ${1-} ]; do
 	case "$1" in
 		--iface)
@@ -18,6 +23,7 @@ while [ ! -z ${1-} ]; do
 	esac
 done
 
+### DISCOVER INTERFACE ADDRESS AND NETWORK #############################
 typeset	net=$(	awk	'/^inet / { print $2 }'		\
 			"/etc/hostname.${iface}"		)
 typeset	ipv4=$(	echo	$net				|
@@ -25,34 +31,88 @@ typeset	ipv4=$(	echo	$net				|
 typeset	net=$(	echo	$net		|
 		sed	's@[0-9]*/@0/@'		)
 
-typeset	ts=$(date +%Y%m%d%H%M%S)
+### CONFIGURE UNBOUND AS FORWARDER #####################################
+# backup default config
+[ ! -e '/etc/examples/unbound.conf' ]			&&
+cp	-a	'/var/unbound/etc/unbound.conf'	\
+		'/etc/examples/unbound.conf'		||
+# timestamp backup if default was already backed up
 cp	-a	'/var/unbound/etc/unbound.conf'		\
 		"/var/unbound/etc/.unbound.conf.${ts}"
-sed	-e	'/^server:/ a\
+# enable tls
+# allow localhost query and private class A queries
+# bind to interface
+sed	-e	's/#tls-cert-bundle/tls-cert-bundle/'	\
+	-e	'/hide-identity/ i\
+	do-not-query-localhost: no\
+	local-zone: "10.in-addr.arpa" nodefault\
+\
+'							\
+	-e	'/^server:/ a\
 	interface: '"${ipv4}"'\
-'	"/var/unbound/etc/.unbound.conf.${ts}"	\
+'	'/etc/examples/unbound.conf'			\
 	>	'/var/unbound/etc/unbound.conf'
+# configure tls forward zone to use quad9 and cloudflare
+printf	'%s\n'					\
+	'forward-zone:'				\
+	>>	'/var/unbound/etc/unbound.conf'
+printf	'\t%s\n'						\
+	'name: "."'						\
+	'forward-tls-upstream: yes'				\
+	'forward-first: no'					\
+	'forward-addr: 9.9.9.9@853#dns.quad9.net'		\
+	'forward-addr: 149.112.112.112@853#dns.quad9.net'	\
+	'forward-addr: 1.1.1.1@853#cloudflare-dns.com'		\
+	'forward-addr: 1.0.0.1@853#cloudflare-dns.com'		\
+	>>	'/var/unbound/etc/unbound.conf'
+ftp	-S	do					\
+	-o	'/var/unbound/db/root.hints'		\
+	'https://www.internic.net/domain/named.root'
+! unbound-anchor	-a	"/var/unbound/db/root.key" # should exit 1
 unbound-checkconf
+rcctl	enable	unbound
 rcctl	restart unbound
 
-typeset	ts=$(date +%Y%m%d%H%M%S)
-cp	-a	'/etc/dhcpd.conf'		\
-		"/etc/.dhcpd.conf.${ts}"
-sed	-e	's/9.9.9.9/'"${ipv4}"'/'	\
-	"/etc/.dhcpd.conf.${ts}"		\
-	>	'/etc/dhcpd.conf'
-rcctl	restart	dhcpd
+### CONFIGURE LOCALHOST TO USE UNBOUND FORWARDER #######################
 cp	-a	'/etc/resolv.conf'		\
 		"/etc/.resolv.conf.${ts}"
-sed	-e	's/9.9.9.9/'"${ipv4}"'/'	\
-	"/etc/.resolv.conf.${ts}"		\
+printf	'nameserver %s\nlookup file bind\n'	\
+	"${ipv4}"				\
 	>	'/etc/resolv.conf'
+# restart network
 sh	'/etc/netstart'
+host	'quad9.net'
 
+### CONFIGURE DHCPD TO USE UNBOUND FORWARDER ###########################
+cp	-a	'/etc/dhcpd.conf'		\
+		"/etc/.dhcpd.conf.${ts}"
+sed	-e	'/option domain-name-servers /d'	\
+	-e	'1i\
+option domain-name-servers '"${ipv4}"';'		\
+	"/etc/.dhcpd.conf.${ts}"			\
+	>	'/etc/dhcpd.conf'
+rcctl	enable	dhcpd
+rcctl	restart	dhcpd
+
+### CONFIGURE NSD
+cp	-a	'/var/nsd/etc/nsd.conf'		\
+		'/etc/examples/nsd.conf'
+sed	-e				\
+	'/^server/ a\
+	ip-address: 127.0.0.1@5678\
+'					\
+	'/etc/examples/nsd.conf'	\
+	>	'/var/nsd/etc/nsd.conf'
+nsd-checkconf	'/var/nsd/etc/nsd.conf'
+rcctl	enable	nsd
+rcctl	start	nsd
+
+### PACKET FILTER ######################################################
+typeset	anchor_cfg="filter-50-${iface}"
+# establish dns server and client pf tables
 echo	"!pfctl -t dns-s -T add ${iface}"	\
 	>>	"/etc/hostname.${iface}"
-sh	'/etc/netstart'	$iface
+sh	'/etc/netstart'	"${iface}"
+host	quad9.net
 
-host	quad9.net	$ipv4
-
-# vim: ts=8:sw=8:sts=8:noet:ft=zsh
+# vim: ts=8:sw=8:sts=8:noet:ft=sh

@@ -1,9 +1,14 @@
 #!/usr/bin/env sh
+#
+# Usage: chad-cfg-gw --ip 192.0.2.2 --mask 29 --hop 192.0.2.1 \
+#                    --iface em0 --vlan 4000 --description 'WAN Uplink'
+#
+########################################################################
 
 set -euo pipefail
 set -x
 
-# parse aguments
+### PARSE ARGUMENTS ####################################################
 while [ ! -z ${1-} ]; do
 	case "$1" in
 		--ip)
@@ -37,169 +42,134 @@ while [ ! -z ${1-} ]; do
 	esac
 done
 
-# set edge/wan interface to up
+### SET INTERFACE TO UP ################################################
 typeset	iface_cfg="hostname.${iface}"
+# if interface conf file doesn't exist, set it to `up` and nothing else
 [ -e "/etc/${iface_cfg}" ]			||
 echo	'up'	>	"/etc/${iface_cfg}"
-grep	-q "^up$"	"/etc/${iface_cfg}"	||
+# if interface conf exists but doesn't bring up the interface, add `up`
+# to the beginning of the file
+grep	-q	"^up$"	"/etc/${iface_cfg}"	||
 {	cp	-a	"/etc/${iface_cfg}"	\
 			"/tmp/${iface_cfg}"
 	sed	-e	'1i\
 up\
 '	>	"/etc/${iface_cfg}"
 }
-# if vlan, switch to vlan conf file
-[ -z ${vlan-} ]	||
+
+### IF VLAN, SWITCH TO CONF FILE TO VLAN ###############################
+[ -z ${vlan-} ]							||
 {	typeset	iface_cfg="hostname.vlan${vlan}"
 	# interface
 	printf	'%s\n'					\
 		"vnetid ${vlan} parent ${iface}"	\
 		'up'					\
 	>	"/etc/${iface_cfg}"
+	# `iface` variable is now the vlan and physical iface is saved as
+	# `parent_iface`
 	typeset	parent_iface="${iface}"
 	typeset	iface="vlan${vlan}"
 }
-# finish configuring interface
+
+### FINISH CONFIGURING INTERFACE #######################################
 printf	'%s\n'					\
 	'lladdr random'				\
 	"inet ${ipv4}/${mask}"			\
-	>>	"/etc/${iface_cfg}"
-printf	'%s\n'					\
 	"description '${description-WAN}'"	\
 	>>	"/etc/${iface_cfg}"
 
-# pf
-typeset	anchor_cfg="filter-50-${iface}"
-typeset	anchor="filter-50/${iface}"
+### PACKET FILTER ######################################################
+typeset	iface_anchor="filter-50/${iface}"
+typeset	iface_anchor_cfg="filter-50-${iface}"
+typeset	nat_anchor="translation/outbound"
+typeset	nat_anchor_cfg="translation-outbound"
 typeset	bogon_url='https://www.team-cymru.org/Services/Bogons/bogon-bn-agg.txt'
 # install pf config
 cp	-a	'/etc/pf.conf'		\
 		'/etc/.pf.conf.default'
 cp	-a	"${0%/*}/../etc"	\
 		'/'
-touch	"/etc/pf.anchors/${anchor_cfg}"
-chmod	600	"/etc/pf.anchors/${anchor_cfg}"
-# antispoof
+# install anchor for this interface
+touch	"/etc/pf.anchors/${iface_anchor_cfg}"
+chmod	600	"/etc/pf.anchors/${iface_anchor_cfg}"
+# antispoof rule
 printf	'%s\n'						\
 	''						\
 	"antispoof quick log for ${iface}"		\
-	''						\
-	>>	"/etc/pf.anchors/${anchor_cfg}"
-# wan service
+	>>	"/etc/pf.anchors/${iface_anchor_cfg}"
+# establish bogon and wan client tables
 printf	'%s\n'								\
 	''								\
-	'!pfctl -t bogons -T replace -f "/etc/pf.tables/bogon-bn-agg.txt"'    \
+	'!pfctl -t bogons -T replace -f "/etc/pf.tables/bogon-bn-agg.txt"' \
 	"!pfctl -t wan-c -T add ${iface}"				\
 	>>	"/etc/${iface_cfg}"
-printf	'%s\n'								\
-	''								\
-	"block in quick log on ${iface} from <bogons>"			\
-	"block out quick log on ${iface} to <bogons>"			\
-	''								\
-	"pass out log on ${iface} proto { tcp udp icmp } \\"		\
-	"from <wan-c> to ! <bogons> nat-to ${iface} modulate state"	\
-	>>	"/etc/pf.anchors/${anchor_cfg}"
-# load anchor
-printf	'%s\n'							\
-	"!pfctl -a ${anchor} -f /etc/pf.anchors/${anchor_cfg}"	\
-	>>	"/etc/${iface_cfg}"
 # check for bogon changes monthly
+# do not automatically load the bogon table
 printf	'%s\n'								\
 	"( cd /tmp; curl -LO ${bogon_url} ) 2> /dev/null"		\
 	'diff /tmp/bogon-bn-agg.txt /etc/pf.tables/bogon-bn-agg.txt'	\
 	>>	'/etc/monthly.local'
-# allow this host to access the internet
+# outbound nat
+printf	'%s %s\n'						\
+	"match out log on ${iface} proto { tcp udp icmp }"	\
+	"from <wan-c> to ! <bogons> nat-to ${ipv4}"		\
+	>	"/etc/pf.anchors/${nat_anchor_cfg}"
+# wan service rules
+printf	'%s\n'							\
+	''							\
+	"block in quick log on ${iface} from <bogons>"		\
+	"block out quick log on ${iface} to <bogons>"		\
+	''							\
+	"pass out log on ${iface} proto { tcp udp icmp } \\"	\
+	"from <wan-c> to ! <bogons> modulate state"		\
+	>>	"/etc/pf.anchors/${iface_anchor_cfg}"
+# load anchors
+printf	'%s\n'								\
+	"!pfctl -a ${iface_anchor} -f /etc/pf.anchors/${iface_anchor_cfg}" \
+	"!pfctl -a ${nat_anchor} -f /etc/pf.anchors/${nat_anchor_cfg}"	\
+	>>	"/etc/${iface_cfg}"
+# allow this host to access the internet from the gateway interface
 printf	'%s\n'					\
 	"!pfctl -t wan-c -T add ${iface}"	\
 	>>	"/etc/${iface_cfg}"
-pfctl	-nf	'/etc/pf.conf'	&&
+# load pf config
+pfctl	-nf	'/etc/pf.conf'
 pfctl	-f	'/etc/pf.conf'
 
-# default gateway
+### ROUTING AND DNS ####################################################
+# configure next hop address as the default gateway
 printf	'%s\n'			\
 	"${next_hop}"		\
 	>	'/etc/mygate'
-
 # use quadnine until a local server is available
 printf	'%s\n'				\
 	'nameserver 9.9.9.9'		\
 	'lookup file bind'		\
 	>	'/etc/resolv.conf'
 
-# bring up the network
+### BRING UP THE NETWORK ###############################################
 # requires multiple attempts (not sure why)
 sh	'/etc/netstart'
 while	! {	ping	-w	1	\
 			-c	1	\
-			$next_hop	||
+			"${next_hop}"	||
 		ping	-w	1	\
 			-c	1	\
-			9.9.9.9;		}; do
+			'9.9.9.9';		}; do
 	sleep	1
 	sh	'/etc/netstart'
 done
+# enable packet forwarding
+echo	'net.inet.ip.forwarding=1'	>>	'/etc/sysctl.conf'
+sysctl	-w	'net.inet.ip.forwarding=1'
 
-# unbound
-cp	-a	'/var/unbound/etc/unbound.conf'	\
-		'/etc/examples/unbound.conf'
-sed	-e	's/#tls-cert-bundle/tls-cert-bundle/'	\
-	-e	'/hide-identity/ i\
-	do-not-query-localhost: no\
-	local-zone: "10.in-addr.arpa" nodefault\
-\
-'	'/etc/examples/unbound.conf'			\
-	>	'/var/unbound/etc/unbound.conf'
-printf	'%s\n'					\
-	'forward-zone:'				\
-	>>	'/var/unbound/etc/unbound.conf'
-printf	'\t%s\n'						\
-	'name: "."'						\
-	'forward-tls-upstream: yes'				\
-	'forward-first: no'					\
-	'forward-addr: 9.9.9.9@853#dns.quad9.net'		\
-	'forward-addr: 149.112.112.112@853#dns.quad9.net'	\
-	'forward-addr: 1.1.1.1@853#cloudflare-dns.com'		\
-	'forward-addr: 1.0.0.1@853#cloudflare-dns.com'		\
-	>>	'/var/unbound/etc/unbound.conf'
-ftp	-S	do					\
-	-o	'/var/unbound/db/root.hints'		\
-	'https://www.internic.net/domain/named.root'
-! unbound-anchor	-a	"/var/unbound/db/root.key" # should exit 1
-unbound-checkconf
-rcctl	enable	unbound
-rcctl	start	unbound
-
-# use local resolver
-printf	'%s\n'				\
-	'nameserver 127.0.0.1'		\
-	'lookup file bind'		\
-	>	'/etc/resolv.conf'
-sh	'/etc/netstart'
-host	quad9.net
-
-# nsd
-cp	-a	'/var/nsd/etc/nsd.conf'		\
-		'/etc/examples/nsd.conf'
-sed	-e				\
-	'/^server/ a\
-	ip-address: 127.0.0.1@5678\
-'					\
-	'/etc/examples/nsd.conf'	\
-	>	'/var/nsd/etc/nsd.conf'
-nsd-checkconf	'/var/nsd/etc/nsd.conf'
-rcctl	enable	nsd
-rcctl	start	nsd
-
-# enable but do not configure yet
+### PREPARE DHCPD CONFIG ###############################################
 printf	'%s\n'				\
 	'authoritative;'		\
 	'default-lease-time 1800;'	\
 	'max-lease-time 3600;'		\
 	>	'/etc/dhcpd.conf'
+# enable but do not start
 rcctl	enable dhcpd
-
-# enable packet forwarding
-echo	'net.inet.ip.forwarding=1'	>>	'/etc/sysctl.conf'
-sysctl	-w	'net.inet.ip.forwarding=1'
 
 # vim: ts=8:sw=8:sts=8:noet:ft=sh
