@@ -1,4 +1,9 @@
 #!/usr/bin/env sh
+#
+# Usage: chad-cfg-host	--net sales --name desk-001 \
+#			--mac 00:11:22:33:44:55
+#
+########################################################################
 
 set -euo pipefail
 set -x
@@ -25,6 +30,7 @@ while [ ! -z ${1-} ]; do
 	esac
 done
 
+### SETUP ENVIRONMENT ##################################################
 typeset	dhcpd_block=$(	sed	-ne	'/shared-network '"${net}"'/ {
 						:loop
 						p
@@ -58,6 +64,7 @@ while [ -z ${ipv4-} ]; do
 	}
 done
 
+### DHCPD ##############################################################
 typeset	ts=$(date +%Y%m%d%H%M%S)
 cp	-a	'/etc/dhcpd.conf'		\
 		"/etc/.dhcpd.conf.${ts}"
@@ -79,8 +86,7 @@ sed	-e	'/shared-network '"${net}"'/ {
 	>	'/etc/dhcpd.conf'
 rcctl	restart	dhcpd
 
-# add A record
-typeset	ts=$(date +%Y%m%d%H%M%S)
+### ADD A RECORD #######################################################
 cp	-a	"/var/nsd/zones/master/${zone}"		\
 		"/var/nsd/zones/master/.${zone}.${ts}"
 printf	'%s\tIN\tA\t%s\n'		\
@@ -90,4 +96,4 @@ nsd-checkzone	"${zone}"	"/var/nsd/zones/master/${zone}"
 rcctl	reload	nsd
 host	"${name}.${zone}"
 
-# vim: ts=8:sw=8:sts=8:noet:ft=zsh
+# vim: ts=8:sw=8:sts=8:noet:ft=sh

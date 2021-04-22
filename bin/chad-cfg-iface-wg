@@ -1,10 +1,16 @@
 #!/usr/bin/env sh
-# Usage:
+#
+# Usage: chad-cfg-iface-wg	--subnet 129 --name remote-worker \
+#				--site 99 --groups remote,lan \
+#				--description 'Remote Workers' \
+#				--tables dns-c,ntp-c,nas-c
+#
+########################################################################
 
 set -euo pipefail
 set -x
 
-# parse aguments
+### PARSE AGUMENTS #####################################################
 while [ ! -z ${1-} ]; do
 	case "$1" in
 		--subnet)
@@ -38,7 +44,7 @@ while [ ! -z ${1-} ]; do
 	esac
 done
 
-# discover environment
+### SETUP ENVIRONMENT ##################################################
 typeset	iface="wg${subnet}"
 typeset	iface_cfg="hostname.${iface}"
 : ${site:=$(	ifconfig					|
@@ -59,15 +65,14 @@ typeset	nameservers:=$(	grep "interface:[[:space:]]*10"			\
 			cut -d ' ' -f 2					)}
 : ${nameservers:=9.9.9.9}
 
-# install wireguard if not installed already
+### WIREGUARD ##########################################################
+# install if not already
 which	wg		||
 pkg_add	wireguard-tools
 install	-d	-m	700	'/etc/wg'
-
 # generate key
 typeset	pvk=$(	wg	genkey	)
 typeset	port=$(( 46000 + $subnet ))
-
 # configure wg server
 printf	'%s\n'					\
 	'[Interface]'				\
@@ -76,7 +81,7 @@ printf	'%s\n'					\
 	''					\
 	>	"/etc/wg/wg${subnet}.conf"
 
-# configure wg interface
+### INTERFACE ##########################################################
 printf	'%s\n'								\
 	'up'								\
 	"inet ${ipv4}/24"						\
@@ -86,7 +91,6 @@ printf	'%s\n'								\
 printf	'%s\n'				\
 	"description '${description}'"	\
 	>>	"/etc/${iface_cfg}"
-
 # groups
 echo	"group ${name}"			\
 	>>	"/etc/${iface_cfg}"
@@ -95,63 +99,111 @@ for g in ${groups-}; do
 		>>	"/etc/${iface_cfg}"
 done
 
-# antispoof rule
-printf	'%s | %s\n'					\
-	"!echo 'antispoof quick log for ${iface}'"	\
-	"pfctl -a ${iface} -f -"			\
-	>>	"/etc/${iface_cfg}"
-# ping
-printf	'%s | %s\n'							\
-	"!echo 'pass in on ${iface} inet proto icmp to ${iface}'"	\
-	"pfctl -a ${iface} -f -"					\
-	>>	"/etc/${iface_cfg}"
+### PACKET FILTER ######################################################
+typeset	iface_anchor="filter-60/${iface}"
+typeset	iface_anchor_cfg="filter-60-${iface}"
+typeset	srv_anchor="filter-30/srv-${iface}"
+typeset	srv_anchor_cfg="filter-30-srv-${iface}"
+typeset	adm_table="adm-${name%%-}"
+touch	"/etc/pf.anchors/${iface_anchor}"
+chmod	600	"/etc/pf.anchors/${iface_anchor_cfg}"
+# antispoof
+printf	'%s\n'								\
+	''								\
+	"antispoof quick log for ${iface}"				\
+	"block in quick log on ${iface} from ! ${iface}:network"
+	>>	"/etc/pf.anchors/${iface_anchor_cfg}"
+# adm
+printf	'%s\n'								\
+	''								\
+	"table <${adm_table}> persist"					\
+	"pass log on ${iface} from <${adm_table}> to ${iface}:network"	\
+	>>	"/etc/pf.anchors/${iface_anchor_cfg}"
+# allow ping to and from gateway
+printf	'%s\n'							\
+	''							\
+	"pass in on ${iface} inet proto icmp to ${iface} \\"	\
+	"icmp-type echoreq keep state"				\
+	''							\
+	"pass out on ${iface} inet proto icmp \\"		\
+	"from ${iface} to ${iface}:network \\"			\
+	"icmp-type echoreq keep state"				\
+	>>	"/etc/pf.anchors/${iface_anchor_cfg}"
 # wireguard service
-printf	'%s | %s\n'							\
-	"!echo 'pass in on egress inet proto udp to egress port ${port}'" \
-	"pfctl -a ${iface} -f -"					\
+printf	'%s\n'								\
+	"pass in on egress inet proto udp to egress port ${port}"	\
+	>>	"/etc/pf.anchors/${srv_anchor_cfg}"
+# load anchors
+printf	'%s\n'								\
+	"!pfctl -a ${iface_anchor} -f /etc/pf.anchors/${iface_anchorcfg}" \
 	>>	"/etc/${iface_cfg}"
-
+printf	'%s\n'								\
+	"!pfctl -a ${srv_anchor} -f /etc/pf.anchors/${srv_anchor_cfg}"	\
+	>>	"/etc/${iface_cfg}"
 # pf tables
 for t in ${tables-}; do
 	echo	"!pfctl -t ${t} -T add ${iface}:network"	\
 		>>	"/etc/${iface_cfg}"
 done
-sh '/etc/netstart' "${iface}"
+sh	'/etc/netstart'	"${iface}"
 printf	'%s\n'	"network for ${iface} configured successfully."	>&2
 
-# nsd
+### ADD ZONE TO NSD ####################################################
 printf	'zone:\n\tname: "%s"\n\tzonefile: "master/%s"\n\n'	\
-	"${fqdn}"	"${fqdn}"				\
+	"${fqdn}"		"${fqdn}"			\
+	"${ipv4_net_ptr}"	"${ipv4_net_ptr}"		\
 	>>	'/var/nsd/etc/nsd.conf'
 nsd-checkconf	'/var/nsd/etc/nsd.conf'
 # zone file
 printf	'$ORIGIN\t\t\t%s.\n$TTL\t4h\n\n'	\
 	"${fqdn}"				\
 	>	"/var/nsd/zones/master/${fqdn}"
-printf	'@\tIN\tSOA\t%s. hostmaster.%s. (\n'		\
-	"${fqdn}"	"${domain}"			\
+printf	'@\tIN\tSOA\tns-001 adm (\n'		\
 	>>	"/var/nsd/zones/master/${fqdn}"
+printf	'\t\t%s\t; %s\n'			\
+	"$(date +%y%m%d%H%M)"	'serial'	\
+	'1h'			'refresh'	\
+	'30m'			'retry'		\
+	'7d'			'expire'	\
+	>>	"/var/nsd/zones/master/${fqdn}"
+printf	'\t\t%s )\t; %s\n\n'			\
+	'1h'	'negative'			\
+	>>	"/var/nsd/zones/master/${fqdn}"
+# name servers
+printf	'\tIN\tNS\tns-001\n'			\
+	>>	"/var/nsd/zones/master/${fqdn}"
+# records
+printf	'%s\tIN\t%s\t%s\n'			\
+	"${hostname}"	'A'	"${ipv4}"	\
+	'ns-001'	'CNAME'	"${hostname}"	\
+	>>	"/var/nsd/zones/master/${fqdn}"
+# reverse zone file
+printf	'$TTL\t4h\n\n@\tIN\tSOA\tns-001.%s. adm.%s. (\n'	\
+	"${fqdn}"	"${fqdn}"				\
+	>>	"/var/nsd/zones/master/${ipv4_net_ptr}"
 printf	'\t\t%s\t; %s\n'				\
 	"$(date +%y%m%d%H%M)"	'serial'		\
 	'1h'			'refresh'		\
 	'30m'			'retry'			\
 	'7d'			'expire'		\
-	>>	"/var/nsd/zones/master/${fqdn}"
+	>>	"/var/nsd/zones/master/${ipv4_net_ptr}"
 printf	'\t\t%s )\t; %s\n\n'				\
 	'1h'	'negative'				\
-	>>	"/var/nsd/zones/master/${fqdn}"
+	>>	"/var/nsd/zones/master/${ipv4_net_ptr}"
 # name servers
-printf	'@\tIN\tNS\t%s.\n'				\
-	"$(hostname -s).${fqdn}"			\
-	>>	"/var/nsd/zones/master/${fqdn}"
+printf	'\tIN\tNS\tns-001.%s.\n'			\
+	"ns-001.${fqdn}"				\
+	>>	"/var/nsd/zones/master/${ipv4_net_ptr}"
 # records
-printf	'%s\tIN\t%s\t%s\n'				\
-	"$(hostname -s)"	'A'	"${ipv4}"		\
-	>>	"/var/nsd/zones/master/${fqdn}"
+printf	'%s\tIN\t%s\t%s.\n'				\
+	"${ipv4##*.}"	'PTR'	"${hostname}.${fqdn}"	\
+	>>	"/var/nsd/zones/master/${ipv4_net_ptr}"
 nsd-checkzone	"${fqdn}"	"/var/nsd/zones/master/${fqdn}"
+nsd-checkzone	"${fqdn}"	"/var/nsd/zones/master/${ipv4_net_ptr}"
+rcctl	enable	nsd
 rcctl	restart nsd
 
-# unbound
+### ALLOW CLIENTS TO QUERY THROUGH UNBOUND #############################
 typeset	ts="$(date +%Y%m%d%H%M%S)"
 cp	-a	'/var/unbound/etc/unbound.conf'		\
 		"/var/unbound/etc/.unbound.conf.${ts}"
@@ -159,15 +211,17 @@ sed -e							\
 '/hide-version/ i\
 	private-domain: "'"${fqdn}"'"\
 	domain-insecure: "'"${fqdn}"'"\
-	access-control: '"10.${site}.${subnet}.0/24"' allow\
+	access-control: '"${ipv4_net}.0/24"' allow\
 \
 '	"/var/unbound/etc/.unbound.conf.${ts}"			\
 	>	'/var/unbound/etc/unbound.conf'
 printf	'\nstub-zone:\n\tname: "%s"\n\tstub-addr: %s\n\tstub-no-cache: yes\n' \
-	"${fqdn}"	'127.0.0.1@5678'				\
+	"${fqdn}"		'127.0.0.1@5678'			\
+	"${ipv4_net_ptr}"	'127.0.0.1@5678'			\
 	>>	'/var/unbound/etc/unbound.conf'
 unbound-checkconf
+rcctl	enable	unbound
 rcctl	restart unbound
 printf	'%s\n'	"dns for ${iface} configured successfully."	>&2
 
-# vim: ts=8:sw=8:sts=8:noet:ft=zsh
+# vim: ts=8:sw=8:sts=8:noet:ft=sh
