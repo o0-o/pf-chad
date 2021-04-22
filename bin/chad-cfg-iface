@@ -1,9 +1,9 @@
 #!/usr/bin/env sh
 #
-# Usage: cfg_iface	--vlan --subnet 99 --name sales --iface em0 \
+# Usage: cfg-iface	--vlan --subnet 99 --name sales --iface em0 \
 #			--site 23 --mtu 9000 --groups lan \
 #			--dhcp-start 100 --description 'Sales Dept' \
-#			--tables sales,dns-c,ntp-c,wan- \
+#			--tables sales,dns-c,ntp-c,wan-c,nas-c
 #
 ########################################################################
 
@@ -146,7 +146,7 @@ for g in ${groups-}; do
 done
 
 ### PACKET FILTER ######################################################
-typeset	iface_anchor="filter/60-${iface}"
+typeset	iface_anchor="filter-60/${iface}"
 typeset	iface_anchor_cfg="filter-60-${iface}"
 typeset	adm_table="adm-${name%%-}"
 touch	"/etc/pf.anchors/${iface_anchor}"
@@ -180,7 +180,7 @@ printf	'%s\n'							\
 	>>	"/etc/pf.anchors/${iface_anchor_cfg}"
 # load anchor
 printf	'%s\n'								\
-	"!pfctl -a ${iface_anchor} -f /etc/pf.anchors/${iface_anchor}"	\
+	"!pfctl -a ${iface_anchor} -f /etc/pf.anchors/${iface_anchor_cfg}" \
 	>>	"/etc/${iface_cfg}"
 # pf tables
 for t in ${tables-}; do

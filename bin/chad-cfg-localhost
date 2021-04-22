@@ -64,7 +64,7 @@ set -x
 #		-F	"/tmp/i/fstab.${mirror_dev}"	\
 #		$mirror_dev
 
-# hardening
+### HARDENING ##########################################################
 rcctl	enable	accounting
 rcctl	disable	slaacd
 sysctl	-w	vm.malloc_conf=CFGU
@@ -77,15 +77,15 @@ printf	'%s\n'				\
 	'CHECKFILESYSTEMS=1'		\
 	>>	'/etc/daily.local'
 ! fgrep	-q	'/altroot ffs xx 0 0'	'/etc/fstab'	||
-printf	'%s\n'				\
-	'ROOTBACKUP=1'			\
+printf	'%s\n'						\
+	'ROOTBACKUP=1'					\
 	>>	'/etc/daily.local'
 
-# time
+### TIME ###############################################################
 ln	-sf	'/usr/share/zoneinfo/America/New_York'	\
 		'/etc/localtime'
 
-# antivirus
+### CLAMAV ANTIVIRUS ###################################################
 pkg_add clamav
 cp	-a	'/etc/freshclam.conf'		\
 		'/etc/examples/freshclam.conf'
@@ -117,7 +117,7 @@ printf	'%s\n'				\
 	'nice -n 20 clamdscan /'	\
 	>	'/etc/daily.local'
 
-# smartd
+### SMARTD #############################################################
 pkg_add	smartmontools
 cp	-a	'/etc/smartd.conf'		\
 		'/etc/examples/smartd.conf'
@@ -127,17 +127,18 @@ printf	'%s%s%s\n'					\
 	'-W 4,35,40 -m root'				\
 	>>	'/etc/smartd.conf'
 
-# check for updates
+### UPDATES ############################################################
+# firmware
 fw_update	-i		|
 fgrep	-q	'Missing'	||
 fw_update
-
+# system
 [[ $(syspatch -c) = '' ]]	||
 syspatch
 
-# ipmi
-[ -e  '/dev/ipmi'*  ]	&&
-pkg_add	ipmitool	&&
+### IPMI ###############################################################
+[ -e  '/dev/ipmi'*  ]		&&
+pkg_add	ipmitool		&&
 cp	-a	'/bsd'		\
 		'/bsd.GENERIC'
 printf	'%s\n'		\
@@ -146,7 +147,7 @@ printf	'%s\n'		\
 config	-ef	'/bsd'
 sha256	-h	'/var/db/kernel.SHA256'	'/bsd'
 
-# add admin user
+### CREATE ADMIN USER ##################################################
 typeset dict_length=$(	wc	-l	'/usr/share/dict/words'	|
 			awk	'{print $1}'
 		)
@@ -168,7 +169,7 @@ useradd	-m					\
 cp	-a	'/etc/examples/doas.conf'	\
 		'/etc/doas.conf'
 
-# sensorsd
+### SENSORSD ###########################################################
 cp	-a	'/etc/examples/sensorsd.conf'	\
 		'/etc/sensorsd.conf'
 # exclude temp and fan not listed by sysctl to avoid ipmi quirks
