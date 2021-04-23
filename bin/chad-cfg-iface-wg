@@ -57,10 +57,10 @@ typeset	domain=$(	hostname				|
 			cut -d '.' -f -2			|
 			rev						)
 typeset fqdn="${name}.${domain}"
-typeset	nameservers:=$(	grep "interface:[[:space:]]*10"			\
+typeset	nameservers:=$(	grep	"interface:[[:space:]]*10"	\
 				'/var/unbound/etc/unbound.conf'	|
 			cut -d ' ' -f 2					)
-: ${nameservers:=$(	grep 'nameserver[[:space:]]*10'		\
+: ${nameservers:=$(	grep	'nameserver[[:space:]]*10'		\
 				'/etc/resolv.conf'		|
 			cut -d ' ' -f 2					)}
 : ${nameservers:=9.9.9.9}
@@ -72,7 +72,7 @@ pkg_add	wireguard-tools
 install	-d	-m	700	'/etc/wg'
 # generate key
 typeset	pvk=$(	wg	genkey	)
-typeset	port=$(( 46000 + $subnet ))
+typeset	port=$(	awk	'/'"${subnet}"'/ {print $1; exit}'	)
 # configure wg server
 printf	'%s\n'					\
 	'[Interface]'				\
@@ -224,4 +224,4 @@ rcctl	enable	unbound
 rcctl	restart unbound
 printf	'%s\n'	"dns for ${iface} configured successfully."	>&2
 
-# vim: ts=8:sw=8:sts=8:noet:ft=sh
+# vim: ts=8:sw=8:sts=8:noet:ft=zsh
