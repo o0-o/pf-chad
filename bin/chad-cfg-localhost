@@ -121,11 +121,13 @@ printf	'%s\n'				\
 pkg_add	smartmontools
 cp	-a	'/etc/smartd.conf'		\
 		'/etc/examples/smartd.conf'
-printf	'%s%s%s\n'					\
-	'DEVICESCAN -a -o on -S on -n standby,q '	\
-	'-s (S/../.././01|L/../../6/03) '		\
+printf	'%s %s %s\n'					\
+	'DEVICESCAN -a -o on -S on -n standby,q'	\
+	'-s (S/../.././01|L/../../6/03)'		\
 	'-W 4,35,40 -m root'				\
 	>>	'/etc/smartd.conf'
+rcctl	enable	smartd
+rcctl	start	smartd
 
 ### UPDATES ############################################################
 # firmware
@@ -135,6 +137,19 @@ fw_update
 # system
 [[ $(syspatch -c) = '' ]]	||
 syspatch
+# scheduled system updates
+printf	'%s\n'					\
+	'# system updates'			\
+	'[[ $(syspatch -c) = '' ]]	||'	\
+	'syspatch'				\
+	''					\
+	>>	'/etc/weekly.local'
+# scheduled package updates
+printf	'%s\n'					\
+	'# package updates'			\
+	'pkg_add -u'				\
+	''					\
+	>>	'/etc/daily.local'
 
 ### IPMI ###############################################################
 [ -e  '/dev/ipmi'*  ]		&&
