@@ -136,7 +136,7 @@ printf	'%s\n'								\
 	>>	"/etc/pf.anchors/${srv_anchor_cfg}"
 # load anchors
 printf	'%s\n'								\
-	"!pfctl -a ${iface_anchor} -f /etc/pf.anchors/${iface_anchorcfg}" \
+	"!pfctl -a ${iface_anchor} -f /etc/pf.anchors/${iface_anchor_cfg}" \
 	>>	"/etc/${iface_cfg}"
 printf	'%s\n'								\
 	"!pfctl -a ${srv_anchor} -f /etc/pf.anchors/${srv_anchor_cfg}"	\
