@@ -72,7 +72,8 @@ pkg_add	wireguard-tools
 install	-d	-m	700	'/etc/wg'
 # generate key
 typeset	pvk=$(	wg	genkey	)
-typeset	port=$(	awk	'/'"${subnet}"'$/ {print $1; exit}'	)
+typeset	port=$(	awk	'/'"${subnet}"'$/ {print $1; exit}'	\
+			'/etc/wg/wg-ports.conf'				)
 # configure wg server
 printf	'%s\n'					\
 	'[Interface]'				\
