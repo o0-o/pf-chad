@@ -149,7 +149,7 @@ done
 typeset	iface_anchor="filter-60/${iface}"
 typeset	iface_anchor_cfg="filter-60-${iface}"
 typeset	adm_table="adm-${name%%-}"
-touch	"/etc/pf.anchors/${iface_anchor}"
+touch	"/etc/pf.anchors/${iface_anchor_cfg}"
 chmod	600	"/etc/pf.anchors/${iface_anchor_cfg}"
 # allow dhcp
 printf	'%s\n'						\
