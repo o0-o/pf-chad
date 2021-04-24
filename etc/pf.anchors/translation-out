@@ -1,0 +1,8 @@
+# SUPER ADMIN
+
+pass	in	quick	log	from	<adm>
+pass	out	quick	log	from	<adm>
+block	out	quick	log	from	<adm>	\
+				to	<adm>
+
+# vim: ts=8:sw=8:sts=8:noet:ft=pf
