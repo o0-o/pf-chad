@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 #
-# Usage: chad-cfg-host	--net sales --name desk-001 \
+# Usage: chad-cfg-host-gw	--net sales --name desk-001 \
 #		--pubkey M9dXmlGMLKItCNaVEwil75+AgGeJJKuYhUvDgjw2ASA=
 #
 ########################################################################
@@ -19,8 +19,8 @@ while [ ! -z ${1-} ]; do
 			typeset name=$2
 			shift 2
 			;;
-		--mac)
-			typeset mac=$2
+		--pubkey)
+			typeset pubkey=$2
 			shift 2
 			;;
 		*)
@@ -31,26 +31,23 @@ while [ ! -z ${1-} ]; do
 done
 
 ### SETUP ENVIRONMENT ##################################################
-typeset	dhcpd_block=$(	sed	-ne	'/shared-network '"${net}"'/ {
-						:loop
-						p
-						n
-						/^}/ {
-							p
-							q
-						}
-						b loop
-					}'			\
-				'/etc/dhcpd.conf'			)
-typeset	zone=$(	echo	"${dhcpd_block}"	|
-		grep	"option domain-name "	|
-		awk	'{ print $3 }'		|
-		tr	-d	'"'		|
-		tr	-d	';'			)
-typeset	net_octets=$(	echo	"${dhcpd_block}"		|
-			grep	'subnet'			|
-			awk	'{ print $2 }'			|
-			cut	-d	'.'	-f	-3		)
+typeset	zone_file=$(	grep	-rm	1				\
+				"\$ORIGIN[[:space:]]*${net}\."		\
+				'/var/nsd/zones/'			|
+				cut	-d	':'	-f	1	      )
+typeset	zone=$(	grep	"\$ORIGIN[[:space:]]*${net}\."	\
+			"${zone_file}"			|
+		awk	'{print $NF}'			|
+		sed	's/\.$//'				)
+typeset	net_octets=$(	grep	-i					\
+				"[[:space:]]IN[[:space:]]*A[[:space:]]"	\
+				"${zone_file}"				|
+			awk	'{print $4}'				|
+			sed	's@/[0-9]*$@@'				|
+			cut	-d	'.'	-f	-3		      )
+typeset	wg_iface="wg$(	echo	$ipv4				|
+			cut	-d	'.'	-f	3		)"
+typeset wg_conf="/etc/wg/${wg_iface}.conf"
 typeset host_octet=1
 # find first available ip address
 while [ -z ${ipv4-} ]; do
@@ -64,29 +61,14 @@ while [ -z ${ipv4-} ]; do
 	}
 done
 
-### DHCPD ##############################################################
-typeset	ts=$(date +%Y%m%d%H%M%S)
-cp	-a	'/etc/dhcpd.conf'		\
-		"/etc/.dhcpd.conf.${ts}"
-sed	-e	'/shared-network '"${net}"'/ {
-			:loop
-			n
-			/range/ {
-				a\
-\
-		host '"${name}"' {\
-			hardware ethernet '"${mac}"';\
-			fixed-address '"${ipv4}"';\
-		}
-				b
-			}
-			b loop
-		}'					\
-		"/etc/.dhcpd.conf.${ts}"		\
-	>	'/etc/dhcpd.conf'
-rcctl	restart	dhcpd
+### REGISTER WG HOST ###################################################
+printf	'\n\n[Peer]\nPublickey = %s\nAllowedIPs = %s'		\
+	"${pubkey}"	"${ipv4}/32"				\
+	>>	"${wg_conf}"
+sh	'/etc/netstart'	"${wg_iface}"
 
 ### ADD A RECORD #######################################################
+typeset	ts="$(date +%Y%m%d%H%M%S)"
 cp	-a	"/var/nsd/zones/master/${zone}"		\
 		"/var/nsd/zones/master/.${zone}.${ts}"
 printf	'%s\tIN\tA\t%s\n'		\
