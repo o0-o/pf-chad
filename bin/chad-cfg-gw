@@ -1,7 +1,8 @@
 #!/usr/bin/env sh
 #
-# Usage: chad-cfg-gw --ip 192.0.2.2 --mask 29 --hop 192.0.2.1 \
-#                    --iface em0 --vlan 4000 --description 'WAN Uplink'
+# Usage: chad-cfg-gw --ip 192.0.2.3 --carp 192.0.2.2 --mask 29 \
+#                    --hop 192.0.2.1 --iface em0 --vlan 4000 \
+#                    --bw 100M --description 'WAN Uplink'
 #
 ########################################################################
 
@@ -13,6 +14,10 @@ while [ ! -z ${1-} ]; do
 	case "$1" in
 		--ip)
 			typeset ipv4=$2
+			shift 2
+			;;
+		--carp)
+			typeset carp_ipv4=$2
 			shift 2
 			;;
 		--mask)
@@ -29,6 +34,17 @@ while [ ! -z ${1-} ]; do
 			;;
 		--vlan)
 			typeset vlan=$2
+			shift 2
+			;;
+		--bw)
+			echo	$2					|
+			grep	-q	"[Mm]$"				&&
+			typeset up_kps_limit=$(( ${2%[Mm]} * 920 ))	||
+			{	echo	$2				|
+				grep	-q	"[Kk]$"			&&
+				typeset	up_kps_limit=$((${2%[Kk]} * 92 / 100))
+			}						||
+			typeset	up_kps_limit=$(( $2 * 92 / 100000 ))
 			shift 2
 			;;
 		--description)
@@ -78,6 +94,18 @@ printf	'%s\n'					\
 	"description '${description-WAN}'"	\
 	>>	"/etc/${iface_cfg}"
 
+### CONFIGURE CARP ADDRESS #############################################
+[ -z "${carp_ipv4-}" ]				||
+printf	'%s\n'					\
+	'vhid 0'				\
+	"pass $(openssl rand -base64 8)"	\
+	"carpdev ${iface}"			\
+	'up'					\
+	'lladdr random'				\
+	"inet ${carp_ipv4}/${mask}"		\
+	"description '${description} (CARP)'"	\
+	>	'/etc/hostname.carp0'
+
 ### PACKET FILTER ######################################################
 typeset	iface_anchor="filter-50/${iface}"
 typeset	iface_anchor_cfg="filter-50-${iface}"
@@ -112,7 +140,7 @@ printf	'%s\n'								\
 # outbound nat
 printf	'%s %s\n'						\
 	"match out log on ${iface} proto { tcp udp icmp }"	\
-	"from <wan-c> to ! <bogons> nat-to ${ipv4}"		\
+	"from <wan-c> to ! <bogons> nat-to ${carp_ipv4-$ipv4}"	\
 	>	"/etc/pf.anchors/${nat_anchor_cfg}"
 # wan service rules
 printf	'%s\n'							\
@@ -162,6 +190,35 @@ done
 # enable packet forwarding
 echo	'net.inet.ip.forwarding=1'	>>	'/etc/sysctl.conf'
 sysctl	-w	'net.inet.ip.forwarding=1'
+# enable carp
+echo	'net.inet.carp.preempt=1'	>>	'/etc/sysctl.conf'
+sysctl	-w	'net.inet.carp.preempt=1'
+
+### SPEED TEST #########################################################
+# as a policy only run things from pip as nobody
+pkg_add	python3	py3-pip
+/usr/local/bin/pip*	install	speedtest-cli
+typeset	up_bps=$(	doas	-u	nobody				\
+				speedtest-cli	--no-download		\
+						--secure		\
+						--csv			\
+						--csv-delimiter	'@'	|
+			cut	-d	'@'	-f	8		|
+			cut	-d	'.'	-f	1		      )
+
+### QUEUEING ###########################################################
+#fq_codel
+typeset	queue_anchor="queueing/${iface}"
+typeset	queue_anchor_cfg="queueing-${iface}"
+: ${up_kps_limit:=$(( $up_bps * 92 / 100000 ))}
+printf	'%s '								\
+	"queue fq_codel on ${iface}"					\
+	"flows 1024 bandwidth ${up_kps_limit}K max ${up_kps_limit}K"	\
+	'qlimit 1024 default'						\
+	>>	"/etc/pf.anchors/${queue_anchor_cfg}"
+printf	'%s\n'								\
+	"!pfctl -a ${queue_anchor} -f /etc/pf.anchors/${queue_anchor_cfg}" \
+	>>	"/etc/${iface_cfg}"
 
 ### PREPARE DHCPD CONFIG ###############################################
 printf	'%s\n'				\
